@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSA Import — ระบบนำเข้าข้อมูลใบขน (ข้อมูลกลาง)</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Sarabun',Tahoma,sans-serif;background:#eef1f6;color:#1f2933;font-size:14px}
+.app{max-width:1320px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 30px rgba(0,0,0,.06)}
+header{background:linear-gradient(100deg,#1f3864,#2e5496);color:#fff;padding:16px 26px;display:flex;align-items:center;gap:14px}
+header .logo{width:38px;height:38px;border-radius:9px;background:#fff;color:#1f3864;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}
+header h1{font-size:17px;font-weight:700}header .sub{font-size:11px;opacity:.85;margin-top:2px}
+header .badge{margin-left:auto;background:rgba(255,255,255,.18);padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600}
+.tabs{display:flex;border-bottom:1px solid #e3e8f0;background:#f8fafc}
+.tab{padding:14px 24px;font-size:14px;color:#8a97a8;cursor:pointer;border-bottom:3px solid transparent;font-weight:600;user-select:none}
+.tab:hover{background:#eef3fb}.tab.active{color:#1f3864;border-bottom-color:#2e5496;background:#fff}
+.wrap{padding:24px}
+.screen{display:none}.screen.on{display:block}
+h2.title{font-size:18px;color:#1f3864;margin-bottom:4px}
+.muted{color:#7a8699;font-size:12.5px;margin-bottom:16px}
+.drop{border:2px dashed #b9c6dc;border-radius:14px;padding:30px;text-align:center;background:#f7faff;cursor:pointer}
+.drop:hover{background:#eef4ff;border-color:#2e5496}.drop .big{font-size:38px}.drop h3{color:#1f3864;margin:6px 0 3px;font-size:15px}
+.btn{background:#2e5496;color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer}
+.btn:hover{background:#24426f}.btn.green{background:#2e9e5b}.btn.green:hover{background:#247d48}
+.btn.ghost{background:#fff;color:#2e5496;border:1.5px solid #cdd8ea}.btn.sm{padding:6px 12px;font-size:12px}
+.cards{display:flex;gap:11px;flex-wrap:wrap;margin:4px 0 16px}
+.card{flex:1 1 130px;background:linear-gradient(135deg,#f7faff,#eef3fb);border:1px solid #e3eaf5;border-radius:11px;padding:12px 14px}
+.card .k{font-size:10.5px;color:#7a8699;text-transform:uppercase}.card .v{font-size:19px;font-weight:800;color:#1f3864;margin-top:2px}
+.card .v small{font-size:11px;color:#8794a8}
+table{width:100%;border-collapse:collapse;font-size:11.5px;white-space:nowrap}
+#mtb{table-layout:auto}
+#mtb th,#mtb td{min-width:60px;padding:6px 10px}
+#mtb th{white-space:nowrap;vertical-align:bottom}
+#mtb td{max-width:260px;white-space:normal;word-break:break-word;vertical-align:top}
+#mtb td.num{white-space:nowrap;min-width:78px}
+#mtb.rep th,#mtb.rep td{min-width:0;padding:5px 8px}
+#mtb.rep th{white-space:normal;word-break:normal;max-width:115px;vertical-align:bottom}
+#mtb.rep td{max-width:150px}
+#mtb.rep td.num{min-width:0}
+#mtb thead tr:nth-child(2) th{position:sticky;top:31px}
+td.sup{max-width:170px;white-space:normal;word-break:break-word;font-size:10.5px;color:#334155}
+th{background:#1f3864;color:#fff;padding:7px 7px;text-align:left;position:sticky;top:0;font-weight:600}
+td{padding:5px 7px;border-bottom:1px solid #eef1f6}
+tbody tr:nth-child(even){background:#f8fafc}tbody tr:hover{background:#eef4ff}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl-wrap{border:1px solid #e3eaf5;border-radius:11px;overflow:auto;max-height:62vh}
+.flex-between{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.pill{padding:5px 12px;border-radius:8px;border:1.5px solid #cdd8ea;background:#fff;color:#2e5496;cursor:pointer;font-size:12.5px;font-weight:600;user-select:none}
+.pill.on{background:#2e5496;color:#fff;border-color:#2e5496}
+select,input.s{padding:6px 10px;border:1px solid #cdd8ea;border-radius:7px;font-family:inherit;font-size:12.5px}
+.note{border-radius:10px;padding:11px 15px;font-size:12.5px;margin-bottom:14px}
+.note.ok{background:#eafaf1;border:1px solid #c9ecd8;color:#1e7d46}
+.note.info{background:#eaf2fd;border:1px solid #bcd6f5;color:#1c5a96}
+.file{display:inline-flex;gap:6px;background:#eaf2fd;border:1px solid #bcd6f5;border-radius:7px;padding:4px 10px;font-size:11.5px;margin:3px 5px 0 0}
+.empty{padding:34px;text-align:center;color:#9aa6b6}
+.split{color:#8794a8;font-size:11px}
+#ov{display:none;position:fixed;inset:0;background:rgba(31,56,100,.5);z-index:99;align-items:center;justify-content:center}
+.ovbox{background:#fff;padding:26px 42px;border-radius:14px;text-align:center}
+.spin{width:38px;height:38px;border:4px solid #dde6f4;border-top-color:#2e5496;border-radius:50%;margin:0 auto;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+mark{background:#fff3a8}
+</style></head>
+<body>
+<div id="ov"><div class="ovbox"><div class="spin"></div><div id="ovt" style="margin-top:13px;font-weight:700;color:#1f3864">กำลังทำงาน...</div></div></div>
+<div class="app">
+<header>
+  <div class="logo">OS</div>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน</h1>
+  <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
+  <div class="badge" id="hb">● ข้อมูลกลาง</div>
+</header>
+<div class="tabs">
+  <div class="tab active" data-t="0" onclick="tab(0)">📥 นำเข้าเอกสาร</div>
+  <div class="tab" data-t="1" onclick="tab(1)">🗄️ ฐานข้อมูล (กลาง)</div>
+  <div class="tab" data-t="2" onclick="tab(2)">🧾 MSBC Template</div>
+</div>
+<div class="wrap">
+
+<div class="screen on" id="t0">
+  <h2 class="title">นำเข้าเอกสาร</h2>
+  <p class="muted">ลากไฟล์ใบขน/invoice เข้ามา → ส่งขึ้น <b>Google Drive Inbox</b> (ทุกคนเห็นตรงกัน) → ระบบอ่านให้ตอนเที่ยง</p>
+  <div class="drop" id="dz" onclick="document.getElementById('fi').click()">
+    <div class="big">📂</div><h3>ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</h3>
+    <p class="muted" style="margin:5px 0 0">PDF (ใบขน, HAWB, Invoice, เอกสารรวม)</p>
+  </div>
+  <input type="file" id="fi" multiple accept="application/pdf" style="display:none">
+  <div id="up" style="margin-top:16px"></div>
+  <div class="note info" style="margin-top:14px" id="inbox"></div>
+  <div style="margin-top:8px"><button class="btn ghost sm" id="clrbtn" onclick="clearInbox()">🗑️ เคลียร์ไฟล์ที่อ่านเข้าฐานข้อมูลแล้ว</button></div>
+</div>
+
+<div class="screen" id="t1">
+  <div class="flex-between">
+    <h2 class="title">ฐานข้อมูลกลาง</h2>
+    <div>
+      <span class="pill on" id="pf" onclick="setView('fin')">📊 Finance (ราย Job)</span>
+      <span class="pill" id="pp" onclick="setView('pur')">📦 Purchase (รายไอเทม)</span>
+      <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+    </div>
+  </div>
+  <div class="cards" id="stats"></div>
+  <div class="flex-between">
+    <div><input class="s" id="q" placeholder="🔎 ค้นหาทุกคอลัมน์…" oninput="render();focusQ()" style="width:230px;margin-right:8px"><span id="filt"></span></div>
+    <div><button class="btn green" onclick="exportXLSX()">⬇ Excel</button> <button class="btn ghost" onclick="exportCSV()">CSV</button></div>
+  </div>
+  <div class="tbl-wrap"><table id="tb"></table></div>
+  <div class="note info" style="margin-top:12px" id="dbnote"></div>
+</div>
+
+<div class="screen" id="t2">
+  <div class="flex-between">
+    <h2 class="title">MSBC Template — สร้าง journal ลง Business Central</h2>
+    <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+  </div>
+  <p class="muted">เลือกใบขน + ชนิดเอกสาร → ระบบสร้างบรรทัด journal ตามเทมเพลต MSBC (เลือก GLI/DHL และเคส 1PO/หลาย PO อัตโนมัติ) → กดออก Excel ลง Business Central ได้เลย</p>
+  <div class="flex-between">
+    <div>
+      ใบขน (HAWB): <select class="s" id="mh" onchange="msbcHAWB=this.value;renderMSBC()"></select>
+      &nbsp; ชนิด:
+      <span class="pill on" id="mtd" onclick="msbcType='duty';renderMSBC()">อากร (Duty)</span>
+      <span class="pill" id="mtf" onclick="msbcType='freight';renderMSBC()">ค่าขนส่ง (Freight)</span>
+      <span class="pill" id="mtr" onclick="msbcType='report';reportColSel=null;renderMSBC()">📋 Report (ฟอร์แมตเต็ม)</span>
+      <span class="pill" id="mtt" onclick="msbcType='test';reportColSel=null;renderMSBC()">🧪 test (Duty)</span>
+    </div>
+    <button class="btn" id="mcolbtn" onclick="toggleColPanel()" style="display:none">🔧 เลือกคอลัมน์</button>
+    <button class="btn" id="mcopy" onclick="copyMSBC()">📋 คัดลอกทั้งตาราง</button>
+    <button class="btn green" onclick="exportMSBC()">⬇ Excel</button>
+  </div>
+  <div id="mcolpanel" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px"></div>
+  <div class="note info" id="mcase"></div>
+  <div class="tbl-wrap"><table id="mtb"></table></div>
+  <div class="note info" style="margin-top:12px" id="mnote"></div>
+</div>
+
+</div></div>
+<script>
+const URL_AS='https://script.google.com/macros/s/AKfycbx_TepASsChABfUlMUl3yrsRdaFugAGtN96l7ty9XuTj3oTXnAIMLOgmo68UulDlXlWYw/exec';
+var FIN={head:[],rows:[]},PUR={head:[],rows:[]},INBOX=[],FRTMAP={};
+function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
+ var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg');
+ fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0};});}
+var view='fin',filt='ALL',q='',showFlag=false,editIdx=-1,editView='';
+function startEdit(i){editIdx=i;editView=view;render();}
+function cancelEdit(){editIdx=-1;editView='';render();}
+async function saveEdit(i){
+ const D=view==='fin'?FIN:PUR;
+ const vals=D.head.map((_,c)=>{const el=document.getElementById('ec_'+c);return el?el.value:D.rows[i][c];});
+ const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='💾 บันทึกกลับฐานข้อมูลกลาง...';
+ try{
+   const r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'updaterow',sheet:view==='fin'?'finance':'purchase',rowIndex:i,values:vals})});
+   const j=await r.json();
+   if(!j||!j.ok) throw new Error((j&&j.error)||'save failed');
+   D.rows[i]=vals.map(v=>v!==''&&!isNaN(v)?parseFloat(v):v);  // อัปเดตในเครื่องให้ตรง
+   editIdx=-1;editView='';ov.style.display='none';render();
+   document.getElementById('dbnote').innerHTML='✅ บันทึกแถวที่แก้กลับฐานข้อมูลกลางแล้ว (ทุกคนจะเห็นเมื่อรีเฟรช)';
+ }catch(e){ov.style.display='none';alert('บันทึกไม่ได้: '+(e.message||e)+'\n(เช็คว่า Apps Script deploy เวอร์ชันใหม่ที่มี updaterow แล้ว)');}
+}
+function finFlag(r,head){
+ const j=String(r[colIdx(head,'Job No. Code')]||''), d=parseFloat(r[colIdx(head,'Import Duty')])||0, v=parseFloat(r[colIdx(head,'VAT')])||0, da=parseFloat(r[colIdx(head,'Duty Amount')])||0;
+ if(j===''||j.includes('รอ Job')) return 'รอ Job';
+ if(Math.abs(da-(d+v))>1) return 'อากร+VAT≠Duty Amount';
+ if(r.some(c=>String(c).includes('ต้องตรวจ'))) return 'ต้องตรวจ';
+ return '';
+}
+
+function tab(n){document.querySelectorAll('.screen').forEach((e,i)=>e.classList.toggle('on',i===n));
+ document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('active',i===n));if(n===1)render();if(n===2)renderMSBC();}
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function hl(t,qs){t=String(t==null?'':t);if(!qs)return esc(t);const i=t.toLowerCase().indexOf(qs);if(i<0)return esc(t);return esc(t.slice(0,i))+'<mark>'+esc(t.slice(i,i+qs.length))+'</mark>'+esc(t.slice(i+qs.length));}
+function focusQ(){const el=document.getElementById('q');if(el){const v=el.value;el.focus();el.setSelectionRange(v.length,v.length);}}
+const isNum=h=>/duty|vat|gross|value|amount|charge|actual|before|มูลค่า|อากร|น้ำหนัก/i.test(h);
+function fmtCell(v){if(typeof v==='number'&&!Number.isInteger(v))return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});return v;}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(v){if(v==null||v==='')return v;var s=String(v).trim(),a,d,m,y;
+ if(a=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){d=+a[1];m=+a[2];y=+a[3];}
+ else if(a=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)){y=+a[1];m=+a[2];d=+a[3];}
+ else return v;
+ if(!m||m<1||m>12)return v;
+ return d+'-'+MON[m-1]+'-'+String(y).slice(-2);}
+const isDate=h=>String(h).trim()==='Date'||String(h).trim()==='วันที่';
+
+async function loadDB(){
+ const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='⬇ ดึงข้อมูลกลางจาก Google Drive...';
+ try{
+   const r=await fetch(URL_AS+'?action=db',{redirect:'follow'});
+   const d=await r.json();
+   if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
+   FIN={head:(d.finance[0]||[]),rows:d.finance.slice(1)};
+   PUR={head:(d.purchase[0]||[]),rows:d.purchase.slice(1)};
+   buildFrtMap(d.freight);INBOX=d.inbox||[];
+   try{localStorage.setItem('osa_cache',JSON.stringify(d));localStorage.setItem('osa_cache_t',new Date().toISOString());}catch(_){}
+   ov.style.display='none';renderInbox();render();
+   document.getElementById('hb').innerHTML='● ข้อมูลกลาง — โหลดสำเร็จ';
+ }catch(e){
+   ov.style.display='none';
+   // สำรอง: ใช้ข้อมูลล่าสุดที่เคยโหลด (cache) ถ้ามี
+   let c=null,ct='';try{c=JSON.parse(localStorage.getItem('osa_cache'));ct=localStorage.getItem('osa_cache_t')||'';}catch(_){}
+   if(c&&c.finance){
+     FIN={head:(c.finance[0]||[]),rows:c.finance.slice(1)};
+     PUR={head:(c.purchase[0]||[]),rows:c.purchase.slice(1)};
+     buildFrtMap(c.freight);INBOX=c.inbox||[];
+     renderInbox();render();
+     document.getElementById('hb').innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
+     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+') • <a href="#" onclick="loadDB();return false">ลองโหลดใหม่</a>';
+   }else{
+     document.getElementById('stats').innerHTML='';
+     document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB()">ลองใหม่</button></td></tr></tbody>';
+     document.getElementById('hb').innerHTML='● เชื่อม Drive ไม่ได้';
+   }
+ }
+}
+async function clearInbox(){
+ var b=document.getElementById('clrbtn');if(b)b.textContent='⏳ กำลังเคลียร์...';
+ try{const r=await fetch(URL_AS+'?action=clearinbox',{redirect:'follow'});const j=await r.json();
+   if(!j||!j.ok)throw new Error((j&&j.error)||'failed');
+   if(b)b.textContent='🗑️ เคลียร์ไฟล์ที่อ่านเข้าฐานข้อมูลแล้ว';
+   alert('ย้ายออกจาก Inbox '+(j.moved?j.moved.length:0)+' ไฟล์'+(j.kept&&j.kept.length?' · เหลือรออ่าน '+j.kept.length+' ไฟล์':''));
+   loadDB();
+ }catch(e){if(b)b.textContent='🗑️ เคลียร์ไฟล์ที่อ่านเข้าฐานข้อมูลแล้ว';alert('เคลียร์ไม่ได้: '+(e.message||e)+'\n(ต้อง deploy Apps Script เวอร์ชันใหม่ที่มี clearinbox)');}
+}
+function renderInbox(){
+ document.getElementById('inbox').innerHTML= INBOX.length
+  ? '📥 ไฟล์รอประมวลผลใน Inbox ('+INBOX.length+'): '+INBOX.map(n=>'<span class="file">📄 '+esc(n)+'</span>').join('')
+  : '📥 Inbox ว่าง — โยนใบขนใหม่เข้ามาได้เลย';
+}
+function colIdx(head,name){return head.findIndex(h=>String(h).trim()===name);}
+function search(rows,qs){if(!qs)return rows;const toks=qs.split(/\s+/);
+ return rows.map(r=>{const t=r.join(' ').toLowerCase();let s=t.includes(qs)?3:0;if(!s)s=toks.filter(x=>t.includes(x)).length;return [s,r];}).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).map(x=>x[1]);}
+
+function render(){
+ const D=view==='fin'?FIN:PUR;
+ q=(document.getElementById('q')||{}).value||'';
+ const qs=q.trim().toLowerCase();
+ const hi=colIdx(FIN.head,'HAWB');
+ const hawbs=[...new Set(FIN.rows.map(r=>r[hi]))].filter(Boolean);
+ const nFlag=FIN.rows.filter(r=>finFlag(r,FIN.head)).length;
+ const flagBtn=(view==='fin'&&nFlag)?' <span class="pill '+(showFlag?'on':'')+'" style="border-color:#e0a800;color:'+(showFlag?'#fff':'#9a7b12')+';'+(showFlag?'background:#e0a800':'')+'" onclick="showFlag=!showFlag;render()">⚠️ ต้องตรวจ '+nFlag+'</span>':'';
+ document.getElementById('filt').innerHTML='กรอง HAWB: <select onchange="filt=this.value;render()"><option value="ALL">ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(h=>'<option '+(filt===h?'selected':'')+'>'+h+'</option>').join('')+'</select>'+flagBtn;
+ const fHA=colIdx(FIN.head,'HAWB'),fD=colIdx(FIN.head,'Import Duty'),fV=colIdx(FIN.head,'VAT');
+ let frows=FIN.rows.filter(r=>filt==='ALL'||String(r[fHA])===String(filt));
+ let prows=PUR.rows.filter(r=>filt==='ALL'||String(r[colIdx(PUR.head,'HAWB')])===String(filt));
+ const sum=(rows,i)=>rows.reduce((a,r)=>a+(parseFloat(r[i])||0),0);
+ document.getElementById('stats').innerHTML=
+  '<div class="card"><div class="k">ใบขน</div><div class="v">'+new Set(frows.map(r=>r[fHA])).size+'</div></div>'+
+  '<div class="card"><div class="k">Finance (รายการ)</div><div class="v">'+frows.length+'</div></div>'+
+  '<div class="card"><div class="k">Purchase (ไอเทม)</div><div class="v">'+prows.length+'</div></div>'+
+  '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmtCell(sum(frows,fD))+'<small> ฿</small></div></div>'+
+  '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(sum(frows,fV))+'<small> ฿</small></div></div>';
+ const HA=colIdx(D.head,'HAWB');
+ const isFin=view==='fin';
+ let rows=D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));
+ if(isFin&&showFlag) rows=rows.filter(r=>finFlag(r,D.head));
+ rows=search(rows,qs);
+ const fFI=colIdx(D.head,'Freight Inv.'),fDH=colIdx(D.head,'DHL Duty Inv.');
+ let h='<thead><tr><th>แก้</th>'+(isFin?'<th>⚠️</th>':'')+D.head.map(c=>'<th class="'+(isNum(c)?'num':'')+'">'+esc(c)+'</th>').join('')+(isFin?'<th>Invoice Supplier</th>':'')+'</tr></thead><tbody>';
+ h+=rows.map(r=>{const oi=D.rows.indexOf(r);const fl=isFin?finFlag(r,D.head):'';
+   if(editView===view&&editIdx===oi){
+     return '<tr style="background:#fffbe9">'+
+       '<td style="white-space:nowrap"><button class="btn sm green" onclick="saveEdit('+oi+')">💾</button> <button class="btn sm ghost" onclick="cancelEdit()">✖</button></td>'+
+       (isFin?'<td></td>':'')+
+       D.head.map((_,i)=>'<td><input id="ec_'+i+'" value="'+esc(r[i])+'" style="width:'+(isNum(D.head[i])?'80':'130')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></td>').join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH]))+'</td>':'')+'</tr>';
+   }
+   return '<tr'+(fl?' style="background:#fdf6e3;box-shadow:inset 3px 0 #e0a800"':'')+'>'+
+   '<td><button class="btn sm ghost" title="แก้ไขแถวนี้" onclick="startEdit('+oi+')">✏️</button></td>'+
+   (isFin?('<td title="'+esc(fl)+'">'+(fl?'⚠️':'')+'</td>'):'')+
+   r.map((c,i)=>{var val=isDate(D.head[i])?fmtDate(c):c;return '<td class="'+(isNum(D.head[i])?'num':'')+'">'+(qs&&!isNum(D.head[i])?hl(val,qs):esc(fmtCell(val)))+'</td>';}).join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH]))+'</td>':'')+'</tr>';}).join('');
+ h+='</tbody>';
+ document.getElementById('tb').innerHTML=rows.length?h:'<tbody><tr><td class="empty">'+(showFlag?'ไม่มีแถวที่ต้องตรวจ 🎉':'ไม่พบที่ตรง/ใกล้เคียง "'+esc(q)+'"')+'</td></tr></tbody>';
+ document.getElementById('dbnote').innerHTML=qs?('พบ '+rows.length+' แถว (ค้นทุกคอลัมน์)'):(isFin?('Finance = 1 แถว/รายการ (ราย item) • Part No. (PD) + Job/Cost Sheet จาก ERP จริง • ⚠️ = ต้องตรวจ • ดึงสดจาก Google Drive (กด ↻ รีเฟรช)'):'Purchase = 1 แถว/รายการสินค้า • ข้อมูลกลาง');
+}
+function setView(v){view=v;document.getElementById('pf').classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');render();}
+
+function fileB64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
+async function handleFiles(files){
+ if(!files.length)return;const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';
+ let res=[];
+ for(let i=0;i<files.length;i++){const f=files[i];ot.textContent='📤 ส่งเข้า Drive Inbox: '+f.name;
+  try{const b64=await fileB64(f);const r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({name:f.name,mimeType:f.type||'application/pdf',base64:b64})});const j=await r.json();res.push([f.name,j&&j.ok]);}catch(e){res.push([f.name,false]);}}
+ ov.style.display='none';
+ document.getElementById('up').innerHTML='<div class="note ok">ส่งไฟล์เข้า Drive Inbox แล้ว '+res.filter(x=>x[1]).length+'/'+res.length+' ไฟล์ — ระบบจะอ่านให้ตอนเที่ยง</div>'+
+   '<div>'+res.map(x=>'<span class="file">'+(x[1]?'✓':'✗')+' '+esc(x[0])+'</span>').join('')+'</div>';
+ loadDB();
+}
+
+function curFiltered(){const D=view==='fin'?FIN:PUR;const HA=colIdx(D.head,'HAWB');const qs=(q||'').trim().toLowerCase();
+ let rows=D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));return {head:D.head,rows:search(rows,qs)};}
+function exportCSV(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
+ const csv='﻿'+[o.head].concat(o.rows).map(r=>r.map(c=>'"'+String(c==null?'':c)+'"').join(',')).join('\n');
+ const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download=(view==='fin'?'Finance':'Purchase')+'.csv';a.click();}
+function loadX(){return new Promise((res,rej)=>{if(window.ExcelJS)return res();const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+async function exportXLSX(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
+ try{await loadX();}catch(e){alert('โหลด Excel ไม่ได้ — ใช้ CSV');return;}
+ const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(view==='fin'?'Finance':'Purchase');
+ ws.columns=o.head.map(h=>({header:h,width:Math.min(34,Math.max(11,String(h).length+4))}));
+ ws.getRow(1).eachCell(c=>{c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
+ o.rows.forEach(r=>ws.addRow(r));
+ ws.eachRow((row,n)=>{if(n===1)return;if(n%2===0)row.eachCell(c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}});row.eachCell((c,col)=>{c.font={name:'Arial',size:10};if(isNum(o.head[col-1])){c.numFmt='#,##0.00';c.alignment={horizontal:'right'};}});});
+ ws.views=[{state:'frozen',ySplit:1}];
+ const buf=await wb.xlsx.writeBuffer();const b=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download='OSA_'+(view==='fin'?'Finance':'Purchase')+'.xlsx';a.click();}
+
+// ===== MSBC Template =====
+var msbcHAWB='ALL',msbcType='duty';
+var MSBC_COLS=['Receipt No.','Receipt Line No.','G/L Temp','Type','No.','Part No.','G/L Account Name','Description/Comment','Location Code','Quantity','Unit of Measure Code','Direct Unit Cost','Line Discount %','Line Amount Excl. VAT','VAT Difference','Gen. Prod. Posting Group','VAT Prod. Posting Group','WHT Product Posting Group','Remark','Ref. Cost Sheet No.','Ref. Cost Sheet Line No.','Cost Sheet Remaining','Department Code','Job No. Code','Item no. Code','Item category Code','Cost sheet no. Code','VAT LINE Code','Employee Code','Subtotal Excl. VAT','Inv. Discount Amount','Invoice Discount','Total Excl. VAT','Total VAT','Total Incl. VAT'];
+function r2(n){return Math.round((+n||0)*100)/100;}
+// ===== Report format (ตรงไฟล์จริง 30 คอลัมน์ หัวข้อ Thai+English) =====
+var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','ค่าปรับและค่าใช้จ่ายอื่นๆ','ค่าใช้จ่ายในการดำเนินงาน','ภาษีมูลค่า สำหรับค่าดำเนินงาน','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)'];
+var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Penalty & Surcharge & Regulatory charge','Bonded storage & Non-routine entry & Duty tax processing','VAT of Regulatory charges & Non-routine entry & Duty tax processing','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','ภาษีมูลค่าเพิ่ม','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier'];
+var TEST_EN=REPORT_EN.slice(0,17).concat(['Invoice Supplier']);  // test = ฝั่ง Duty 17 คอลัมน์ + supplier
+function supplierOf(frtInv,dhlDutyInv){var s=String(frtInv||'');
+ if(s.indexOf('IVAI')>=0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
+ if(s.indexOf('BKKIR')>=0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
+ if(String(dhlDutyInv||'').charAt(0)==='D')return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
+ return '';}
+function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[30]]);});}
+var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
+function visCols(n){var out=[];for(var i=0;i<n;i++){if(reportColSel===null||reportColSel.indexOf(i)>=0)out.push(i);}return out;}
+function curCols(){return (msbcType==='test')?TEST_EN:REPORT_EN;}
+function toggleColPanel(){var p=document.getElementById('mcolpanel');var open=p.style.display==='none';p.style.display=open?'block':'none';if(open)buildColPanel();}
+function buildColPanel(){var COLS=curCols(),sel=reportColSel;
+ var h='<div style="margin-bottom:6px"><b>เลือกคอลัมน์ที่จะแสดง/คัดลอก</b> &nbsp; '
+  +'<a href="#" onclick="reportColSel=null;buildColPanel();renderMSBC();return false" style="color:#2563eb">เลือกทั้งหมด</a> · '
+  +'<a href="#" onclick="reportColSel=[];buildColPanel();renderMSBC();return false" style="color:#2563eb">ล้าง</a></div>'
+  +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 10px">';
+ COLS.forEach(function(c,i){var on=(sel===null)||sel.indexOf(i)>=0;
+  h+='<label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleCol('+i+')"> <span>'+esc(c)+'</span></label>';});
+ h+='</div>';document.getElementById('mcolpanel').innerHTML=h;}
+function toggleCol(i){var COLS=curCols();if(reportColSel===null){reportColSel=[];for(var k=0;k<COLS.length;k++)reportColSel.push(k);}
+ var p=reportColSel.indexOf(i);if(p>=0)reportColSel.splice(p,1);else reportColSel.push(i);renderMSBC();}
+function reportRows(){
+ if(!FIN.rows.length)return [];
+ var H=FIN.head,ci=function(n){return colIdx(H,n);};
+ var sel=(msbcHAWB==='ALL')?null:String(msbcHAWB);
+ var rows=FIN.rows.filter(function(r){return sel===null||String(r[ci('HAWB')])===sel;});
+ var totW={},lastIdx={},firstIdx={};
+ rows.forEach(function(r,i){var h=String(r[ci('HAWB')]);totW[h]=(totW[h]||0)+(+r[ci('Gross')]||0);lastIdx[h]=i;if(firstIdx[h]===undefined)firstIdx[h]=i;});
+ var g=function(r,n){return r[ci(n)];};
+ return rows.map(function(r,i){
+  var h=String(g(r,'HAWB')),w=+g(r,'Gross')||0,tw=totW[h]||1,ratio=w/tw,wa=r2(ratio*1e6)/1e6;
+  var F=FRTMAP[h],isLast=(lastIdx[h]===i),isFirst=(firstIdx[h]===i),a=function(v){return r2(v*ratio);};
+  var frtInv,frtChg,clr,trn,fvat,cust,ot,term,tvat,ins,ivat,amt,pen='',bond='',vreg='';
+  if(F){frtInv=F.inv;frtChg=a(F.air);clr=a(F.clear);trn=a(F.trans);cust=a(F.cust);ot=a(F.ot);term=a(F.term);tvat=a(F.termVat);ins=a(F.ins);ivat=a(F.insVat);
+   fvat=isLast?F.vat:0;
+   amt=r2(frtChg+clr+trn+(+fvat||0)+cust+ot+term+tvat+ins+ivat);
+   pen=(isFirst&&F.pen)?F.pen:'';bond=(isFirst&&F.bond)?F.bond:'';vreg=(isFirst&&F.vreg)?F.vreg:'';
+  }else{frtInv=g(r,'Freight Inv.');frtChg=g(r,'Freight Charge');amt=g(r,'Freight Actual');clr=trn=fvat=cust=ot=term=tvat=ins=ivat='';}
+  var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'));
+  return [h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
+   w, wa, g(r,'System No'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
+   pen, bond, vreg, g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup];
+ });
+}
+function lineToArr(o){var q=o.Qty==null?1:o.Qty,cost=+o.Cost||0;
+ return ['','','',o.Type||'',o.No||'',o.PartNo||'',o.GLName||'',o.Desc||'','',q,o.UoM||'',cost,o.Disc==null?'':o.Disc,r2(q*cost),'',o.GenProd||'',o.VATProd||'',o.WHT||'',o.Remark||'',o.RefCS==null?'':o.RefCS,o.RefCSLine==null?'':o.RefCSLine,'',o.Dept||'VP',o.Job||'',o.ItemNo||'',o.ItemCat||'','','','','','','','','',''];}
+function msbcGenOne(hawb){
+ var H=FIN.head,ci=function(n){return colIdx(H,n);};
+ var rows=FIN.rows.filter(function(r){return String(r[ci('HAWB')])===String(hawb);});
+ if(!rows.length)return [];
+ var gli=String(hawb).indexOf('S00')===0, sys=rows[0][ci('System No')]||'', L=[];
+ function grp(){var g={},o=[];rows.forEach(function(r){var k=(r[ci('Ref. Cost Sheet No.')]||'')+'|'+(r[ci('Job No. Code')]||'');if(!g[k]){g[k]=[];o.push(k);}g[k].push(r);});return o.map(function(k){return g[k];});}
+ if(msbcType==='duty'){
+  grp().forEach(function(g){var duty=g.reduce(function(a,r){return a+(+r[ci('Import Duty')]||0);},0);if(duty<=0)return;
+   var cs=g[0][ci('Ref. Cost Sheet No.')],job=g[0][ci('Job No. Code')]||'Z-STOCK',dept=g[0][ci('Department')]||'VP',po=g[0][ci('PO')];
+   L.push({HAWB:hawb,Type:'Item',No:'Z-IMPORT-TAX',Desc:'Z-IMPORT-TAX - '+po,Cost:r2(duty),GenProd:'5112004',VATProd:'NOVAT',WHT:'NOWHT',RefCS:cs||0,RefCSLine:60000,Dept:dept,Job:job,ItemNo:'Z-IMPORT-TAX',ItemCat:'Z-OTHERS'});});
+  var base=rows.reduce(function(a,r){return a+(+r[ci('Before VAT')]||0);},0);
+  var vendor=gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT';
+  var dch=gli?sys:'1190',d0=rows[0][ci('Department')]||'VP',j0=rows[0][ci('Job No. Code')]||'Z-STOCK';
+  if(base>0){L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:dch+vendor,Cost:r2(base),GenProd:'GL',VATProd:'GVAT',WHT:'NOWHT',Dept:d0,Job:j0});
+   L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:dch+vendor,Qty:-1,Cost:r2(base),GenProd:'GL',VATProd:'NOVAT',WHT:'NOWHT',Dept:d0,Job:j0});}
+ }else{
+  var F=FRTMAP[hawb];
+  if(F){
+   var sw=rows.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)||1;
+   grp().forEach(function(g){
+    var gw=g.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0),rt=gw/sw;
+    var cs=g[0][ci('Ref. Cost Sheet No.')]||0,job=g[0][ci('Job No. Code')]||'Z-STOCK',dept=g[0][ci('Department')]||'VP',po=g[0][ci('PO')];
+    var add=function(o){L.push(Object.assign({HAWB:hawb,RefCS:cs,Dept:dept,Job:job},o));};
+    if(F.air) add({Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+po,Cost:r2(F.air*rt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCSLine:10000,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
+    var clr=(F.clear+F.ot+F.term)*rt; if(clr) add({Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+po,Cost:r2(clr),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCSLine:10000});
+    if(F.trans) add({Type:'Item',No:'Z-TRANSPORT',GLName:'Z-TRANSPORT',Desc:'Z-TRANSPORT - '+po,Cost:r2(F.trans*rt),GenProd:'5112006',VATProd:'NOVAT',WHT:'SERVICE',RefCSLine:30000,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});
+    if(F.cust) add({Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+po,Cost:r2(F.cust*rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCSLine:10000});
+    if(F.ins) add({Type:'Item',No:'Z-INSURANCE',GLName:'Z-INSURANCE',Desc:'Z-INSURANCE - '+po,Cost:r2(F.ins*rt),GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCSLine:50000,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});
+   });
+   var base=r2((F.vat+F.termVat+F.insVat)/0.07),d0=rows[0][ci('Department')]||'VP',j0=rows[0][ci('Job No. Code')]||'Z-STOCK',vd=F.inv+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED';
+   if(base>0){L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:vd,Cost:base,GenProd:'GL',VATProd:'SVAT',WHT:'NOWHT',Dept:d0,Job:j0});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:vd,Qty:-1,Cost:base,GenProd:'GL',VATProd:'NOVAT',WHT:'NOWHT',Dept:d0,Job:j0});}
+  }else{
+   grp().forEach(function(g){var frt=g.reduce(function(a,r){return a+(+r[ci('Freight Charge')]||0);},0);if(frt<=0)return;
+    var cs=g[0][ci('Ref. Cost Sheet No.')],job=g[0][ci('Job No. Code')]||'Z-STOCK',dept=g[0][ci('Department')]||'VP',po=g[0][ci('PO')];
+    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+po,Cost:r2(frt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:cs||0,RefCSLine:10000,Dept:dept,Job:job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});});
+  }
+ }
+ return L;
+}
+function msbcGen(){
+ if(!FIN.rows.length)return [];
+ var H=FIN.head,ci=function(n){return colIdx(H,n);};
+ var hawbs=(msbcHAWB==='ALL')?[...new Set(FIN.rows.map(function(r){return r[ci('HAWB')];}))].filter(Boolean):[msbcHAWB];
+ var L=[];hawbs.forEach(function(h){L=L.concat(msbcGenOne(h));});return L;
+}
+function msbcCell(v){return v==null?'':(typeof v==='number'?(''+v):v);}
+function renderMSBC(){
+ var H=FIN.head||[],hi=colIdx(H,'HAWB');
+ var hawbs=[...new Set((FIN.rows||[]).map(function(r){return r[hi];}))].filter(Boolean);
+ var sel=document.getElementById('mh');
+ if(sel)sel.innerHTML='<option value="ALL"'+(msbcHAWB==='ALL'?' selected':'')+'>ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(msbcHAWB===h?'selected':'')+'>'+h+'</option>';}).join('');
+ document.getElementById('mtd').classList.toggle('on',msbcType==='duty');
+ document.getElementById('mtf').classList.toggle('on',msbcType==='freight');
+ var mtr=document.getElementById('mtr');if(mtr)mtr.classList.toggle('on',msbcType==='report');
+ var mtt=document.getElementById('mtt');if(mtt)mtt.classList.toggle('on',msbcType==='test');
+ var mcb=document.getElementById('mcolbtn');
+ if(msbcType==='report'||msbcType==='test'){
+   var isRep=msbcType==='report';
+   var COLS=isRep?REPORT_EN:TEST_EN, R=isRep?reportRows():testRows();
+   var vc=visCols(COLS.length);
+   if(mcb)mcb.style.display='';
+   document.getElementById('mtb').className='rep';
+   var isN=isRep?function(i){return i===7||i===8||(i>=10&&i<=16)||(i>=18&&i<=28);}:function(i){return i===7||i===8||(i>=10&&i<=16);};
+   var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+COLS.length+' คอลัมน์');
+   document.getElementById('mcase').innerHTML=(isRep?'ฟอร์แมต <b>Report</b> (30 คอลัมน์เต็ม + Supplier)':'ฟอร์แมต <b>test</b> (ฝั่ง Duty + Supplier)')+' — กด 🔧 เลือกคอลัมน์ เพื่อเลือกเฉพาะหัวข้อที่ต้องการ · แล้ว 📋 คัดลอก/Excel วางได้เลย'+nsel;
+   var h='<thead>';
+   if(isRep)h+='<tr>'+vc.map(function(i){return '<th>'+esc(REPORT_TH[i])+'</th>';}).join('')+'</tr>';
+   h+='<tr>'+vc.map(function(i){return '<th'+(isRep?' style="font-weight:400;font-size:10px;opacity:.85"':'')+'>'+esc(COLS[i])+'</th>';}).join('')+'</tr></thead><tbody>';
+   h+=R.map(function(a){return '<tr>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
+   h+='</tbody>';
+   document.getElementById('mtb').innerHTML=R.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล</td></tr></tbody>';
+   document.getElementById('mnote').innerHTML=R.length+' แถว · '+(isRep?'ฟอร์แมต Report เต็ม + Penalty/Bonded/VAT + Supplier':'ฟอร์แมต test = ฝั่งอากร + Penalty/Bonded/VAT + Supplier');
+   return;
+ }
+ if(mcb)mcb.style.display='none';
+ document.getElementById('mcolpanel').style.display='none';
+ document.getElementById('mtb').className='';
+ document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — เลือกทั้งตาราง (หรือกดปุ่ม 📋 คัดลอก) แล้ววางใน Business Central ได้เลย · ชนิด: <b>'+(msbcType==='duty'?'อากร (Duty)':'ค่าขนส่ง (Freight)')+'</b>';
+ var L=msbcGen();
+ var h='<thead><tr>'+MSBC_COLS.map(function(c){return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
+ h+=L.map(function(o){var a=lineToArr(o);return '<tr>'+a.map(function(v,k){return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(MSBC_COLS[k])?'num':'')+'">'+esc(msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
+ h+='</tbody>';
+ document.getElementById('mtb').innerHTML=L.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล (อากร/ค่าขนส่งยังเป็น 0)</td></tr></tbody>';
+ var tot=L.reduce(function(a,o){return a+r2((o.Qty==null?1:o.Qty)*(+o.Cost||0));},0);
+ document.getElementById('mnote').innerHTML=L.length+' บรรทัด · ผลรวม Line Amount = '+tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' ฿ · '+(msbcType==='duty'?'อากร + INPUT VAT':'ค่าขนส่ง (Z-FREIGHT)')+' — เลขเป็นค่าดิบเพื่อวางลง MSBC ได้ตรง';
+}
+function copyMSBC(){
+ var txt;
+ if(msbcType==='report'){var R=reportRows();if(!R.length){alert('ไม่มีข้อมูล');return;}var vc=visCols(REPORT_EN.length);var pk=function(a){return vc.map(function(i){var v=a[i];return v==null?'':v;}).join('\t');};
+   txt=[vc.map(function(i){return REPORT_TH[i];}).join('\t'),vc.map(function(i){return REPORT_EN[i];}).join('\t')].concat(R.map(pk)).join('\n');
+ }else if(msbcType==='test'){var T=testRows();if(!T.length){alert('ไม่มีข้อมูล');return;}var vt=visCols(TEST_EN.length);
+   txt=[vt.map(function(i){return TEST_EN[i];}).join('\t')].concat(T.map(function(a){return vt.map(function(i){var v=a[i];return v==null?'':v;}).join('\t');})).join('\n');
+ }else{var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูล');return;}
+   txt=[MSBC_COLS.join('\t')].concat(L.map(function(o){return lineToArr(o).map(function(v){return v==null?'':v;}).join('\t');})).join('\n');
+ }
+ var done=function(){var b=document.getElementById('mcopy');if(b){var t=b.innerHTML;b.innerHTML='✓ คัดลอกแล้ว';setTimeout(function(){b.innerHTML=t;},1500);}};
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){fallbackCopy(txt,done);});}else fallbackCopy(txt,done);
+}
+function fallbackCopy(txt,cb){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');cb&&cb();}catch(e){alert('คัดลอกไม่ได้ ใช้ปุ่ม Excel แทน');}document.body.removeChild(ta);}
+async function exportMSBC(){
+ try{await loadX();}catch(e){alert('โหลด Excel ไม่ได้');return;}
+ var wb=new ExcelJS.Workbook();
+ if(msbcType==='report'){var R=reportRows();if(!R.length){alert('ไม่มีข้อมูล');return;}var vc=visCols(REPORT_EN.length);
+   var ws=wb.addWorksheet('Report');
+   ws.columns=vc.map(function(i){return {width:Math.min(22,Math.max(11,String(REPORT_EN[i]).length+2))};});
+   ws.addRow(vc.map(function(i){return REPORT_TH[i];}));ws.addRow(vc.map(function(i){return REPORT_EN[i];}));
+   [1,2].forEach(function(n){ws.getRow(n).eachCell(function(c){c.font={name:'Arial',bold:n===1,color:{argb:'FFFFFFFF'},size:8};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});});
+   R.forEach(function(a){ws.addRow(vc.map(function(i){return a[i];}));});
+   ws.views=[{state:'frozen',ySplit:2}];
+   var buf=await wb.xlsx.writeBuffer(),b=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+   var a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download='Report_'+msbcHAWB+'.xlsx';a.click();return;
+ }
+ if(msbcType==='test'){var T=testRows();if(!T.length){alert('ไม่มีข้อมูล');return;}var vt=visCols(TEST_EN.length);
+   var wst=wb.addWorksheet('test');
+   wst.columns=vt.map(function(i){return {width:Math.min(24,Math.max(11,String(TEST_EN[i]).length+2))};});
+   wst.addRow(vt.map(function(i){return TEST_EN[i];}));
+   wst.getRow(1).eachCell(function(c){c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:9};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
+   T.forEach(function(a){wst.addRow(vt.map(function(i){return a[i];}));});
+   wst.views=[{state:'frozen',ySplit:1}];
+   var bt=await wb.xlsx.writeBuffer(),bb=new Blob([bt],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+   var at=document.createElement('a');at.href=window.URL.createObjectURL(bb);at.download='test_'+msbcHAWB+'.xlsx';at.click();return;
+ }
+ var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูลสำหรับสร้าง');return;}
+ var ws2=wb.addWorksheet('MSBC');
+ ws2.columns=MSBC_COLS.map(function(h){return {header:h,width:Math.min(30,Math.max(10,h.length+2))};});
+ ws2.getRow(1).eachCell(function(c){c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:9};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
+ L.forEach(function(o){ws2.addRow(lineToArr(o));});
+ ws2.views=[{state:'frozen',ySplit:1}];
+ var buf2=await wb.xlsx.writeBuffer(),b2=new Blob([buf2],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ var a2=document.createElement('a');a2.href=window.URL.createObjectURL(b2);a2.download='MSBC_'+msbcHAWB+'_'+msbcType+'.xlsx';a2.click();}
+
+window.addEventListener('DOMContentLoaded',()=>{
+ const fi=document.getElementById('fi'),dz=document.getElementById('dz');
+ fi.addEventListener('change',e=>{handleFiles([...e.target.files]);fi.value='';});
+ ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.background='#eef4ff';}));
+ dz.addEventListener('dragleave',e=>{e.preventDefault();dz.style.background='';});
+ dz.addEventListener('drop',e=>{e.preventDefault();dz.style.background='';handleFiles([...e.dataTransfer.files]);});
+ loadDB();
+});
+</script>
+</body></html>
