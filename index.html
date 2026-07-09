@@ -137,8 +137,8 @@ mark{background:#fff3a8}
 const URL_AS='https://script.google.com/macros/s/AKfycbx_TepASsChABfUlMUl3yrsRdaFugAGtN96l7ty9XuTj3oTXnAIMLOgmo68UulDlXlWYw/exec';
 var FIN={head:[],rows:[]},PUR={head:[],rows:[]},INBOX=[],FRTMAP={};
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
- var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg');
- fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0};});}
+ var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight');
+ fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null};});}
 var view='fin',filt='ALL',q='',showFlag=false,editIdx=-1,editView='';
 function startEdit(i){editIdx=i;editView=view;render();}
 function cancelEdit(){editIdx=-1;editView='';render();}
@@ -252,26 +252,26 @@ function render(){
  let rows=D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));
  if(isFin&&showFlag) rows=rows.filter(r=>finFlag(r,D.head));
  rows=search(rows,qs);
- const fFI=colIdx(D.head,'Freight Inv.'),fDH=colIdx(D.head,'DHL Duty Inv.');
+ const fFI=colIdx(D.head,'Freight Inv.'),fDH=colIdx(D.head,'DHL Duty Inv.'),fSys=colIdx(D.head,'System No');
  let h='<thead><tr><th>แก้</th>'+(isFin?'<th>⚠️</th>':'')+D.head.map(c=>'<th class="'+(isNum(c)?'num':'')+'">'+esc(c)+'</th>').join('')+(isFin?'<th>Invoice Supplier</th>':'')+'</tr></thead><tbody>';
  h+=rows.map(r=>{const oi=D.rows.indexOf(r);const fl=isFin?finFlag(r,D.head):'';
    if(editView===view&&editIdx===oi){
      return '<tr style="background:#fffbe9">'+
        '<td style="white-space:nowrap"><button class="btn sm green" onclick="saveEdit('+oi+')">💾</button> <button class="btn sm ghost" onclick="cancelEdit()">✖</button></td>'+
        (isFin?'<td></td>':'')+
-       D.head.map((_,i)=>'<td><input id="ec_'+i+'" value="'+esc(r[i])+'" style="width:'+(isNum(D.head[i])?'80':'130')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></td>').join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH]))+'</td>':'')+'</tr>';
+       D.head.map((_,i)=>'<td><input id="ec_'+i+'" value="'+esc(r[i])+'" style="width:'+(isNum(D.head[i])?'80':'130')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></td>').join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':'')+'</tr>';
    }
    return '<tr'+(fl?' style="background:#fdf6e3;box-shadow:inset 3px 0 #e0a800"':'')+'>'+
    '<td><button class="btn sm ghost" title="แก้ไขแถวนี้" onclick="startEdit('+oi+')">✏️</button></td>'+
    (isFin?('<td title="'+esc(fl)+'">'+(fl?'⚠️':'')+'</td>'):'')+
-   r.map((c,i)=>{var val=isDate(D.head[i])?fmtDate(c):c;return '<td class="'+(isNum(D.head[i])?'num':'')+'">'+(qs&&!isNum(D.head[i])?hl(val,qs):esc(fmtCell(val)))+'</td>';}).join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH]))+'</td>':'')+'</tr>';}).join('');
+   r.map((c,i)=>{var val=isDate(D.head[i])?fmtDate(c):c;return '<td class="'+(isNum(D.head[i])?'num':'')+'">'+(qs&&!isNum(D.head[i])?hl(val,qs):esc(fmtCell(val)))+'</td>';}).join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':'')+'</tr>';}).join('');
  h+='</tbody>';
  document.getElementById('tb').innerHTML=rows.length?h:'<tbody><tr><td class="empty">'+(showFlag?'ไม่มีแถวที่ต้องตรวจ 🎉':'ไม่พบที่ตรง/ใกล้เคียง "'+esc(q)+'"')+'</td></tr></tbody>';
  document.getElementById('dbnote').innerHTML=qs?('พบ '+rows.length+' แถว (ค้นทุกคอลัมน์)'):(isFin?('Finance = 1 แถว/รายการ (ราย item) • Part No. (PD) + Job/Cost Sheet จาก ERP จริง • ⚠️ = ต้องตรวจ • ดึงสดจาก Google Drive (กด ↻ รีเฟรช)'):'Purchase = 1 แถว/รายการสินค้า • ข้อมูลกลาง');
 }
 function setView(v){view=v;document.getElementById('pf').classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');var ps=document.getElementById('ps');if(ps)ps.classList.toggle('on',v==='sum');render();}
 // ---- สรุป 1 บรรทัด/HAWB (รวมค่าส่ง+อากร+VAT) ----
-var SUM_HEAD=['HAWB','PO','จำนวน item','วันที่','System No','Supplier','น้ำหนักรวม','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Inv.'];
+var SUM_HEAD=['HAWB','PO','จำนวน item','วันที่','System No','Supplier','น้ำหนัก (ใบ HAWB)','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Inv.'];
 function freightTotOf(h){var F=FRTMAP[String(h)];if(F)return r2(F.air+F.clear+F.trans+F.ot+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);
  var s=0,ci=colIdx(FIN.head,'Freight Actual'),hi=colIdx(FIN.head,'HAWB');
  FIN.rows.forEach(function(r){if(String(r[hi])===String(h))s+=parseFloat(r[ci])||0;});return r2(s);}
@@ -279,8 +279,8 @@ function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=
  var order=[],map={};
  FIN.rows.forEach(function(r){var h=String(r[iHA]);if(!map[h]){map[h]={hawb:h,items:0,pos:{},date:r[ci('Date')],sys:r[ci('System No')],w:0,duty:0,bv:0,vat:0,da:0,finv:r[ci('Freight Inv.')],dhl:r[ci('DHL Duty Inv.')]};order.push(h);}
    var o=map[h];o.items++;o.pos[r[ci('PO')]]=1;o.w+=parseFloat(r[ci('Gross')])||0;o.duty+=parseFloat(r[ci('Import Duty')])||0;o.bv+=parseFloat(r[ci('Before VAT')])||0;o.vat+=parseFloat(r[ci('VAT')])||0;o.da+=parseFloat(r[ci('Duty Amount')])||0;});
- return order.map(function(h){var o=map[h];
-   return [o.hawb, Object.keys(o.pos).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl), r2(o.w), r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), o.finv||''];});}
+ return order.map(function(h){var o=map[h];var F=FRTMAP[String(h)];var hw=(F&&F.hwt!=null)?F.hwt:r2(o.w);
+   return [o.hawb, Object.keys(o.pos).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), o.finv||''];});}
 function renderSum(){
  q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
  var hi=colIdx(FIN.head,'HAWB');
@@ -340,10 +340,12 @@ function r2(n){return Math.round((+n||0)*100)/100;}
 var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','ค่าปรับและค่าใช้จ่ายอื่นๆ','ค่าใช้จ่ายในการดำเนินงาน','ภาษีมูลค่า สำหรับค่าดำเนินงาน','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)'];
 var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Penalty & Surcharge & Regulatory charge','Bonded storage & Non-routine entry & Duty tax processing','VAT of Regulatory charges & Non-routine entry & Duty tax processing','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','ภาษีมูลค่าเพิ่ม','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier'];
 var TEST_EN=REPORT_EN.slice(0,17).concat(['Invoice Supplier']);  // test = ฝั่ง Duty 17 คอลัมน์ + supplier
-function supplierOf(frtInv,dhlDutyInv){var s=String(frtInv||'');
+function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys||'');
  if(s.indexOf('IVAI')>=0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
  if(s.indexOf('BKKIR')>=0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(String(dhlDutyInv||'').charAt(0)==='D')return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
+ if(y.indexOf('QECL')===0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
+ if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
  return '';}
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[30]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
@@ -377,7 +379,7 @@ function reportRows(){
    amt=r2(frtChg+clr+trn+(+fvat||0)+cust+ot+term+tvat+ins+ivat);
    pen=(isFirst&&F.pen)?F.pen:'';bond=(isFirst&&F.bond)?F.bond:'';vreg=(isFirst&&F.vreg)?F.vreg:'';
   }else{frtInv=g(r,'Freight Inv.');frtChg=g(r,'Freight Charge');amt=g(r,'Freight Actual');clr=trn=fvat=cust=ot=term=tvat=ins=ivat='';}
-  var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'));
+  var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'),g(r,'System No'));
   return [h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
    w, wa, g(r,'System No'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
    pen, bond, vreg, g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup];
