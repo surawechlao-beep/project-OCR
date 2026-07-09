@@ -94,6 +94,7 @@ mark{background:#fff3a8}
     <div>
       <span class="pill on" id="pf" onclick="setView('fin')">📊 Finance (ราย Job)</span>
       <span class="pill" id="pp" onclick="setView('pur')">📦 Purchase (รายไอเทม)</span>
+      <span class="pill" id="ps" onclick="setView('sum')">🧾 รวมราย HAWB</span>
       <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
     </div>
   </div>
@@ -227,6 +228,7 @@ function search(rows,qs){if(!qs)return rows;const toks=qs.split(/\s+/);
  return rows.map(r=>{const t=r.join(' ').toLowerCase();let s=t.includes(qs)?3:0;if(!s)s=toks.filter(x=>t.includes(x)).length;return [s,r];}).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).map(x=>x[1]);}
 
 function render(){
+ if(view==='sum'){renderSum();return;}
  const D=view==='fin'?FIN:PUR;
  q=(document.getElementById('q')||{}).value||'';
  const qs=q.trim().toLowerCase();
@@ -267,7 +269,37 @@ function render(){
  document.getElementById('tb').innerHTML=rows.length?h:'<tbody><tr><td class="empty">'+(showFlag?'ไม่มีแถวที่ต้องตรวจ 🎉':'ไม่พบที่ตรง/ใกล้เคียง "'+esc(q)+'"')+'</td></tr></tbody>';
  document.getElementById('dbnote').innerHTML=qs?('พบ '+rows.length+' แถว (ค้นทุกคอลัมน์)'):(isFin?('Finance = 1 แถว/รายการ (ราย item) • Part No. (PD) + Job/Cost Sheet จาก ERP จริง • ⚠️ = ต้องตรวจ • ดึงสดจาก Google Drive (กด ↻ รีเฟรช)'):'Purchase = 1 แถว/รายการสินค้า • ข้อมูลกลาง');
 }
-function setView(v){view=v;document.getElementById('pf').classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');render();}
+function setView(v){view=v;document.getElementById('pf').classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');var ps=document.getElementById('ps');if(ps)ps.classList.toggle('on',v==='sum');render();}
+// ---- สรุป 1 บรรทัด/HAWB (รวมค่าส่ง+อากร+VAT) ----
+var SUM_HEAD=['HAWB','PO','จำนวน item','วันที่','System No','Supplier','น้ำหนักรวม','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Inv.'];
+function freightTotOf(h){var F=FRTMAP[String(h)];if(F)return r2(F.air+F.clear+F.trans+F.ot+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);
+ var s=0,ci=colIdx(FIN.head,'Freight Actual'),hi=colIdx(FIN.head,'HAWB');
+ FIN.rows.forEach(function(r){if(String(r[hi])===String(h))s+=parseFloat(r[ci])||0;});return r2(s);}
+function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=ci('HAWB');
+ var order=[],map={};
+ FIN.rows.forEach(function(r){var h=String(r[iHA]);if(!map[h]){map[h]={hawb:h,items:0,pos:{},date:r[ci('Date')],sys:r[ci('System No')],w:0,duty:0,bv:0,vat:0,da:0,finv:r[ci('Freight Inv.')],dhl:r[ci('DHL Duty Inv.')]};order.push(h);}
+   var o=map[h];o.items++;o.pos[r[ci('PO')]]=1;o.w+=parseFloat(r[ci('Gross')])||0;o.duty+=parseFloat(r[ci('Import Duty')])||0;o.bv+=parseFloat(r[ci('Before VAT')])||0;o.vat+=parseFloat(r[ci('VAT')])||0;o.da+=parseFloat(r[ci('Duty Amount')])||0;});
+ return order.map(function(h){var o=map[h];
+   return [o.hawb, Object.keys(o.pos).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl), r2(o.w), r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), o.finv||''];});}
+function renderSum(){
+ q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
+ var hi=colIdx(FIN.head,'HAWB');
+ var hawbs=[...new Set(FIN.rows.map(function(r){return r[hi];}))].filter(Boolean);
+ document.getElementById('filt').innerHTML='กรอง HAWB: <select onchange="filt=this.value;render()"><option value="ALL">ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(filt===h?'selected':'')+'>'+h+'</option>';}).join('')+'</select>';
+ var rows=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[0])===String(filt);});
+ if(qs)rows=rows.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs)>=0;});
+ var tD=0,tV=0,tF=0;rows.forEach(function(a){tD+=+a[7]||0;tV+=+a[9]||0;tF+=+a[11]||0;});
+ document.getElementById('stats').innerHTML=
+   '<div class="card"><div class="k">ใบขน (HAWB)</div><div class="v">'+rows.length+'</div></div>'+
+   '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmtCell(tD)+'<small> ฿</small></div></div>'+
+   '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(tV)+'<small> ฿</small></div></div>'+
+   '<div class="card"><div class="k">ค่าส่งรวม</div><div class="v">'+fmtCell(tF)+'<small> ฿</small></div></div>';
+ var numc={2:1,6:1,7:1,8:1,9:1,10:1,11:1};
+ var h='<thead><tr>'+SUM_HEAD.map(function(c,i){return '<th class="'+(numc[i]?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
+ h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+esc(fmtCell(v))+'</td>';}).join('')+'</tr>';}).join('');
+ h+='</tbody>';
+ document.getElementById('tb').innerHTML=rows.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล</td></tr></tbody>';
+ document.getElementById('dbnote').innerHTML='สรุป 1 บรรทัด/ใบขน — รวมค่าส่ง + อากร + VAT ต่อ HAWB ('+rows.length+' ใบขน)';}
 
 function fileB64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
 async function handleFiles(files){
@@ -281,15 +313,17 @@ async function handleFiles(files){
  loadDB();
 }
 
-function curFiltered(){const D=view==='fin'?FIN:PUR;const HA=colIdx(D.head,'HAWB');const qs=(q||'').trim().toLowerCase();
+function curFiltered(){
+ if(view==='sum'){var qs2=(q||'').trim().toLowerCase();var rs=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[0])===String(filt);});if(qs2)rs=rs.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs2)>=0;});return {head:SUM_HEAD,rows:rs};}
+ const D=view==='fin'?FIN:PUR;const HA=colIdx(D.head,'HAWB');const qs=(q||'').trim().toLowerCase();
  let rows=D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));return {head:D.head,rows:search(rows,qs)};}
 function exportCSV(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
  const csv='﻿'+[o.head].concat(o.rows).map(r=>r.map(c=>'"'+String(c==null?'':c)+'"').join(',')).join('\n');
- const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download=(view==='fin'?'Finance':'Purchase')+'.csv';a.click();}
+ const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download=(view==='fin'?'Finance':view==='sum'?'Summary_HAWB':'Purchase')+'.csv';a.click();}
 function loadX(){return new Promise((res,rej)=>{if(window.ExcelJS)return res();const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 async function exportXLSX(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
  try{await loadX();}catch(e){alert('โหลด Excel ไม่ได้ — ใช้ CSV');return;}
- const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(view==='fin'?'Finance':'Purchase');
+ const wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(view==='fin'?'Finance':view==='sum'?'Summary_HAWB':'Purchase');
  ws.columns=o.head.map(h=>({header:h,width:Math.min(34,Math.max(11,String(h).length+4))}));
  ws.getRow(1).eachCell(c=>{c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
  o.rows.forEach(r=>ws.addRow(r));
