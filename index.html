@@ -392,8 +392,7 @@ function renderReport(){
    document.getElementById('stats').innerHTML='<div class="card"><div class="k">แถว (Report)</div><div class="v">'+R.length+'</div></div>'+
      '<div class="card"><div class="k">คอลัมน์</div><div class="v">'+vc.length+'/'+COLS.length+'</div></div>';
  }
- var h='<thead><tr>'+vc.map(function(i){return '<th style="font-size:11px">'+esc(REPORT_TH[i])+'</th>';}).join('')+'</tr>'
-   +'<tr>'+vc.map(function(i){return '<th style="font-weight:400;font-size:10px;opacity:.85">'+esc(COLS[i])+'</th>';}).join('')+'</tr></thead><tbody>';
+ var h='<thead><tr>'+vc.map(function(i){return '<th style="font-size:11px">'+esc(COLS[i])+'</th>';}).join('')+'</tr></thead><tbody>';
  h+=R.map(function(a){return '<tr>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
  h+='</tbody>';
  document.getElementById('tb').innerHTML=R.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล</td></tr></tbody>';
@@ -484,7 +483,7 @@ var MSBC_COLS=['Receipt No.','Receipt Line No.','G/L Temp','Type','No.','Part No
 function r2(n){return Math.round((+n||0)*100)/100;}
 // ===== Report format (ตรงไฟล์จริง 30 คอลัมน์ หัวข้อ Thai+English) =====
 var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','ค่าปรับและค่าใช้จ่ายอื่นๆ','ค่าใช้จ่ายในการดำเนินงาน','ภาษีมูลค่า สำหรับค่าดำเนินงาน','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)'];
-var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Penalty & Surcharge & Regulatory charge','Bonded storage & Non-routine entry & Duty tax processing','VAT of Regulatory charges & Non-routine entry & Duty tax processing','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','ภาษีมูลค่าเพิ่ม','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier'];
+var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Penalty & Surcharge & Regulatory charge','Bonded storage & Non-routine entry & Duty tax processing','VAT of Regulatory charges & Non-routine entry & Duty tax processing','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','Vat of service','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier'];
 var TEST_EN=REPORT_EN.slice(0,17).concat(['Invoice Supplier']);  // test = ฝั่ง Duty 17 คอลัมน์ + supplier
 function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys||'');
  if(s.indexOf('IVAI')>=0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
