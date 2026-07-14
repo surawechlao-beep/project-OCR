@@ -495,7 +495,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[30]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
 function visCols(n){var out=[];for(var i=0;i<n;i++){if(reportColSel===null||reportColSel.indexOf(i)>=0)out.push(i);}return out;}
-function curCols(){return (msbcType==='test')?TEST_EN:REPORT_EN;}
+function curCols(){return (msbcType==='test')?TEST_EN:(msbcType==='duty'||msbcType==='freight')?MSBC_COLS:REPORT_EN;}
 function toggleColPanel(){var p=document.getElementById('mcolpanel');var open=p.style.display==='none';p.style.display=open?'block':'none';if(open)buildColPanel();}
 function buildColPanel(){var COLS=curCols(),sel=reportColSel;
  var h='<div style="margin-bottom:6px"><b>เลือกคอลัมน์ที่จะแสดง/คัดลอก</b> &nbsp; '
@@ -591,6 +591,7 @@ function renderMSBC(){
  var mtr=document.getElementById('mtr');if(mtr)mtr.classList.toggle('on',msbcType==='report');
  var mtt=document.getElementById('mtt');if(mtt)mtt.classList.toggle('on',msbcType==='test');
  var mcb=document.getElementById('mcolbtn');
+ var _mp=document.getElementById('mcolpanel');if(_mp&&_mp.style.display!=='none')setTimeout(buildColPanel,0);
  if(msbcType==='report'||msbcType==='test'){
    var isRep=msbcType==='report';
    var COLS=isRep?REPORT_EN:TEST_EN, R=isRep?reportRows():testRows();
@@ -609,13 +610,14 @@ function renderMSBC(){
    document.getElementById('mnote').innerHTML=R.length+' แถว · '+(isRep?'ฟอร์แมต Report เต็ม + Penalty/Bonded/VAT + Supplier':'ฟอร์แมต test = ฝั่งอากร + Penalty/Bonded/VAT + Supplier');
    return;
  }
- if(mcb)mcb.style.display='none';
- document.getElementById('mcolpanel').style.display='none';
+ if(mcb)mcb.style.display='';
  document.getElementById('mtb').className='';
- document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — เลือกทั้งตาราง (หรือกดปุ่ม 📋 คัดลอก) แล้ววางใน Business Central ได้เลย · ชนิด: <b>'+(msbcType==='duty'?'อากร (Duty)':'ค่าขนส่ง (Freight)')+'</b>';
  var L=msbcGen();
- var h='<thead><tr>'+MSBC_COLS.map(function(c){return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
- h+=L.map(function(o){var a=lineToArr(o);return '<tr>'+a.map(function(v,k){return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(MSBC_COLS[k])?'num':'')+'">'+esc((k===11||k===12||k===14||k===15)?fmtMoney(v):msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
+ var vc=visCols(MSBC_COLS.length);
+ var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MSBC_COLS.length+' คอลัมน์');
+ document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — กด 🔧 เลือกคอลัมน์ เพื่อซ่อน/เลือกเฉพาะที่ต้องการ · แล้ว 📋 คัดลอก/Excel วางลง Business Central ได้เลย · ชนิด: <b>'+(msbcType==='duty'?'อากร (Duty)':'ค่าขนส่ง (Freight)')+'</b>'+nsel;
+ var h='<thead><tr>'+vc.map(function(i){var c=MSBC_COLS[i];return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
+ h+=L.map(function(o){var a=lineToArr(o);return '<tr>'+vc.map(function(i){var v=a[i];return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total/.test(MSBC_COLS[i])?'num':'')+'">'+esc((i===11||i===12||i===14||i===15)?fmtMoney(v):msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
  h+='</tbody>';
  document.getElementById('mtb').innerHTML=L.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล (อากร/ค่าขนส่งยังเป็น 0)</td></tr></tbody>';
  var tot=L.reduce(function(a,o){return a+r2((o.Qty==null?1:o.Qty)*(+o.Cost||0));},0);
@@ -627,8 +629,8 @@ function copyMSBC(){
    txt=[vc.map(function(i){return REPORT_TH[i];}).join('\t'),vc.map(function(i){return REPORT_EN[i];}).join('\t')].concat(R.map(pk)).join('\n');
  }else if(msbcType==='test'){var T=testRows();if(!T.length){alert('ไม่มีข้อมูล');return;}var vt=visCols(TEST_EN.length);
    txt=[vt.map(function(i){return TEST_EN[i];}).join('\t')].concat(T.map(function(a){return vt.map(function(i){var v=a[i];return v==null?'':v;}).join('\t');})).join('\n');
- }else{var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูล');return;}
-   txt=[MSBC_COLS.join('\t')].concat(L.map(function(o){return lineToArr(o).map(function(v){return v==null?'':v;}).join('\t');})).join('\n');
+ }else{var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูล');return;}var vc=visCols(MSBC_COLS.length);
+   txt=[vc.map(function(i){return MSBC_COLS[i];}).join('\t')].concat(L.map(function(o){var a=lineToArr(o);return vc.map(function(i){var v=a[i];return v==null?'':v;}).join('\t');})).join('\n');
  }
  var done=function(){var b=document.getElementById('mcopy');if(b){var t=b.innerHTML;b.innerHTML='✓ คัดลอกแล้ว';setTimeout(function(){b.innerHTML=t;},1500);}};
  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){fallbackCopy(txt,done);});}else fallbackCopy(txt,done);
@@ -657,11 +659,11 @@ async function exportMSBC(){
    var bt=await wb.xlsx.writeBuffer(),bb=new Blob([bt],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
    var at=document.createElement('a');at.href=window.URL.createObjectURL(bb);at.download='test_'+msbcHAWB+'.xlsx';at.click();return;
  }
- var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูลสำหรับสร้าง');return;}
+ var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูลสำหรับสร้าง');return;}var vc=visCols(MSBC_COLS.length);
  var ws2=wb.addWorksheet('MSBC');
- ws2.columns=MSBC_COLS.map(function(h){return {header:h,width:Math.min(30,Math.max(10,h.length+2))};});
+ ws2.columns=vc.map(function(i){return {header:MSBC_COLS[i],width:Math.min(30,Math.max(10,MSBC_COLS[i].length+2))};});
  ws2.getRow(1).eachCell(function(c){c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:9};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
- L.forEach(function(o){ws2.addRow(lineToArr(o));});
+ L.forEach(function(o){var a=lineToArr(o);ws2.addRow(vc.map(function(i){return a[i];}));});
  ws2.views=[{state:'frozen',ySplit:1}];
  var buf2=await wb.xlsx.writeBuffer(),b2=new Blob([buf2],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
  var a2=document.createElement('a');a2.href=window.URL.createObjectURL(b2);a2.download='MSBC_'+msbcHAWB+'_'+msbcType+'.xlsx';a2.click();}
