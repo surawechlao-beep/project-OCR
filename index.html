@@ -418,37 +418,38 @@ function renderJM(){
  document.getElementById('dbnote').innerHTML=qs?('พบ '+rows.length+' แถว'):'PR line list (ERP) • ใช้เทียบ Job No./Cost Sheet/PD ตอนตรวจใบขน • แสดงสูงสุด 2000 แถว';
 }
 // ---- สรุป 1 บรรทัด/HAWB (รวมค่าส่ง+อากร+VAT) ----
-var SUM_HEAD=['HAWB','PO','จำนวน item','วันที่','Duty Invoice No.','Supplier','น้ำหนัก (ใบ HAWB)','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Inv.','Brand','Origin','วันที่อัปโหลด'];
+var SUM_HEAD=['วันที่อัปโหลด','HAWB','PO','Brand (Shipper) - Info from INV','จำนวน item','วันที่','Duty Invoice No.','Supplier','น้ำหนัก (ใบ HAWB)','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Inv.','ประเทศต้นทาง'];
 function freightTotOf(h){var F=FRTMAP[String(h)];if(F)return r2(F.air+F.clear+F.trans+F.ot+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);
  var s=0,ci=colIdx(FIN.head,'Freight Actual'),hi=colIdx(FIN.head,'HAWB');
  FIN.rows.forEach(function(r){if(String(r[hi])===String(h))s+=parseFloat(r[ci])||0;});return r2(s);}
 function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=ci('HAWB');
  // ดึง Brand/Origin/Upload Date จาก Purchase (รวมค่าไม่ซ้ำต่อใบขน)
+ // Brand (Shipper) = ผู้ส่งจากหัว/โลโก้ CIPL · ประเทศต้นทาง = ประเทศต้นทางที่บรรทุก (ต่อใบขน)
  var PH=PUR.head,pci=function(n){return colIdx(PH,n);},pmap={};
  PUR.rows.forEach(function(r){var h=String(r[pci('HAWB')]);if(!h)return;if(!pmap[h])pmap[h]={br:{},or:{},up:''};
-   var b=r[pci('Brand')];if(b)pmap[h].br[b]=1;var o=r[pci('Origin')];if(o)pmap[h].or[o]=1;
+   var b=r[pci('Shipper')];if(b)pmap[h].br[b]=1;var o=r[pci('Country of Dispatch')];if(o)pmap[h].or[o]=1;
    var u=r[pci('Upload Date')];if(u&&!pmap[h].up)pmap[h].up=u;});
  var order=[],map={};
  FIN.rows.forEach(function(r){var h=String(r[iHA]);if(!map[h]){map[h]={hawb:h,items:0,pos:{},date:r[ci('Date')],sys:r[ci('Duty Invoice No.')],w:0,duty:0,bv:0,vat:0,da:0,finv:r[ci('Freight Inv.')],dhl:r[ci('DHL Duty Inv.')]};order.push(h);}
    var o=map[h];o.items++;o.pos[r[ci('PO')]]=1;o.w+=parseFloat(r[ci('Gross')])||0;o.duty+=parseFloat(r[ci('Import Duty')])||0;o.bv+=parseFloat(r[ci('Before VAT')])||0;o.vat+=parseFloat(r[ci('VAT')])||0;o.da+=parseFloat(r[ci('Duty Amount')])||0;});
  return order.map(function(h){var o=map[h];var F=FRTMAP[String(h)];var hw=(F&&F.hwt!=null)?F.hwt:'—';
    var p=pmap[String(h)]||{br:{},or:{},up:''};
-   return [o.hawb, Object.keys(o.pos).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), o.finv||'', Object.keys(p.br).join(', '), Object.keys(p.or).join(', '), p.up?fmtDate(p.up):''];});}
+   return [p.up?fmtDate(p.up):'', o.hawb, Object.keys(o.pos).join(', '), Object.keys(p.br).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), o.finv||'', Object.keys(p.or).join(', ')];});}
 function renderSum(){
  q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
  var hi=colIdx(FIN.head,'HAWB');
  var hawbs=[...new Set(FIN.rows.map(function(r){return r[hi];}))].filter(Boolean);
  document.getElementById('filt').innerHTML='กรอง HAWB: <select onchange="filt=this.value;render()"><option value="ALL">ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(filt===h?'selected':'')+'>'+h+'</option>';}).join('')+'</select>';
- var rows=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[0])===String(filt);});
+ var rows=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[1])===String(filt);});
  if(qs)rows=rows.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs)>=0;});
  var preCF=rows;rows=cfApply('sum',rows);
- var tD=0,tV=0,tF=0;rows.forEach(function(a){tD+=+a[7]||0;tV+=+a[9]||0;tF+=+a[11]||0;});
+ var tD=0,tV=0,tF=0;rows.forEach(function(a){tD+=+a[9]||0;tV+=+a[11]||0;tF+=+a[13]||0;});
  document.getElementById('stats').innerHTML=
    '<div class="card"><div class="k">ใบขน (HAWB)</div><div class="v">'+rows.length+'</div></div>'+
    '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmtCell(tD)+'<small> ฿</small></div></div>'+
    '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(tV)+'<small> ฿</small></div></div>'+
    '<div class="card"><div class="k">ค่าส่งรวม</div><div class="v">'+fmtCell(tF)+'<small> ฿</small></div></div>';
- var numc={2:1,6:1,7:1,8:1,9:1,10:1,11:1};
+ var numc={4:1,8:1,9:1,10:1,11:1,12:1,13:1};
  var h='<thead><tr>'+cfThs('sum',SUM_HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
  h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+esc(fmtCell(v))+'</td>';}).join('')+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
@@ -469,7 +470,7 @@ async function handleFiles(files){
 }
 
 function curFiltered(){
- if(view==='sum'){var qs2=(q||'').trim().toLowerCase();var rs=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[0])===String(filt);});if(qs2)rs=rs.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs2)>=0;});return {head:SUM_HEAD,rows:rs};}
+ if(view==='sum'){var qs2=(q||'').trim().toLowerCase();var rs=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[1])===String(filt);});if(qs2)rs=rs.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs2)>=0;});return {head:SUM_HEAD,rows:rs};}
  if(view==='jm'){var qj=(q||'').trim().toLowerCase();var rj=qj?(JOBMASTER.rows||[]).filter(function(r){return r.join(' ').toLowerCase().indexOf(qj)>=0;}):(JOBMASTER.rows||[]);return {head:JOBMASTER.head||[],rows:rj};}
  if(view==='duty'){var qd=(q||'').trim().toLowerCase();var rd=dutyRows();if(qd)rd=rd.filter(function(a){return a.join(' ').toLowerCase().indexOf(qd)>=0;});return {head:dutyItem?DUTY_HEAD_ITEM:DUTY_HEAD,rows:rd};}
  if(view==='report'){var vc=visCols(REPORT_EN.length),qr=(q||'').trim().toLowerCase();var R=reportRows();if(qr)R=R.filter(function(a){return a.join(' ').toLowerCase().indexOf(qr)>=0;});return {head:vc.map(function(i){return REPORT_EN[i];}),rows:R.map(function(a){return vc.map(function(i){return a[i];});})};}
