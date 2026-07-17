@@ -181,6 +181,7 @@ function hl(t,qs){t=String(t==null?'':t);if(!qs)return esc(t);const i=t.toLowerC
 function focusQ(){const el=document.getElementById('q');if(el){const v=el.value;el.focus();el.setSelectionRange(v.length,v.length);}}
 const isNum=h=>/duty|vat|gross|value|amount|charge|actual|before|unit cost|ต้นทุน|มูลค่า|อากร|น้ำหนัก/i.test(h)&&!/currency|reviewed/i.test(h);
 function fmtCell(v){if(typeof v==='number'&&!Number.isInteger(v))return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});return v;}
+function fmt2(v){var n=typeof v==='number'?v:parseFloat(v);if(isNaN(n))return v;return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmtDate(v){if(v==null||v==='')return v;var s=String(v).trim(),a,d,m,y;
  if(a=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)){d=+a[1];m=+a[2];y=+a[3];}
@@ -374,14 +375,14 @@ function renderDuty(){
  var tD=rows.reduce(function(s,a){return s+a[9];},0),tV=rows.reduce(function(s,a){return s+a[10];},0);
  document.getElementById('stats').innerHTML=
   '<div class="card"><div class="k">'+(dutyItem?'จำนวนไอเทม':'จำนวน Job')+'</div><div class="v">'+rows.length+'</div></div>'+
-  '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmtCell(tD)+'<small> ฿</small></div></div>'+
-  '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(tV)+'<small> ฿</small></div></div>'+
-  '<div class="card"><div class="k">รวมทั้งสิ้น</div><div class="v">'+fmtCell(tD+tV)+'<small> ฿</small></div></div>';
+  '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmt2(tD)+'<small> ฿</small></div></div>'+
+  '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmt2(tV)+'<small> ฿</small></div></div>'+
+  '<div class="card"><div class="k">รวมทั้งสิ้น</div><div class="v">'+fmt2(tD+tV)+'<small> ฿</small></div></div>';
  var numc={0:1,9:1,10:1,11:1};
  var h='<thead><tr>'+cfThs('duty',HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
- h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=9?fmtCell(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
+ h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=9?fmt2(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
- h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmtCell(tD)+'</td><td class="num">'+fmtCell(tV)+'</td><td class="num">'+fmtCell(tD+tV)+'</td></tr></tbody>';
+ h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmt2(tD)+'</td><td class="num">'+fmt2(tV)+'</td><td class="num">'+fmt2(tD+tV)+'</td></tr></tbody>';
  document.getElementById('tb').innerHTML=h;
  document.getElementById('dbnote').innerHTML='Summary Duty ('+(dutyItem?'รายไอเทม (ค่าดิบรายชิ้น)':'รวมต่อ Job — Duty/Vat ปัดลงจำนวนเต็มตามที่จ่ายจริง (ตรงกล่องใบขน)')+') • Total = Duty + Vat • กด ⬇ Excel เพื่อออกรายงาน';
 }
