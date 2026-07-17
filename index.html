@@ -479,12 +479,12 @@ async function handleFiles(files){
 }
 
 function curFiltered(){
- if(view==='sum'){var qs2=(q||'').trim().toLowerCase();var rs=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[1])===String(filt);});if(qs2)rs=rs.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs2)>=0;});return {head:SUM_HEAD,rows:rs};}
- if(view==='jm'){var qj=(q||'').trim().toLowerCase();var rj=qj?(JOBMASTER.rows||[]).filter(function(r){return r.join(' ').toLowerCase().indexOf(qj)>=0;}):(JOBMASTER.rows||[]);return {head:JOBMASTER.head||[],rows:rj};}
- if(view==='duty'){var qd=(q||'').trim().toLowerCase();var rd=dutyRows();if(qd)rd=rd.filter(function(a){return a.join(' ').toLowerCase().indexOf(qd)>=0;});return {head:dutyItem?DUTY_HEAD_ITEM:DUTY_HEAD,rows:rd};}
- if(view==='report'){var vc=visCols(REPORT_EN.length),qr=(q||'').trim().toLowerCase();var R=reportRows();if(qr)R=R.filter(function(a){return a.join(' ').toLowerCase().indexOf(qr)>=0;});return {head:vc.map(function(i){return REPORT_EN[i];}),rows:R.map(function(a){return vc.map(function(i){return a[i];});})};}
+ if(view==='sum'){var qs2=(q||'').trim().toLowerCase();var rs=sumByHAWB().filter(function(a){return filt==='ALL'||String(a[1])===String(filt);});if(qs2)rs=rs.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs2)>=0;});rs=cfApply('sum',rs);return {head:SUM_HEAD,rows:rs};}
+ if(view==='jm'){var qj=(q||'').trim().toLowerCase();var rj=qj?(JOBMASTER.rows||[]).filter(function(r){return r.join(' ').toLowerCase().indexOf(qj)>=0;}):(JOBMASTER.rows||[]);rj=cfApply('jm',rj);return {head:JOBMASTER.head||[],rows:rj};}
+ if(view==='duty'){var qd=(q||'').trim().toLowerCase();var rd=dutyRows();if(qd)rd=rd.filter(function(a){return a.join(' ').toLowerCase().indexOf(qd)>=0;});rd=cfApply('duty',rd);return {head:dutyItem?DUTY_HEAD_ITEM:DUTY_HEAD,rows:rd};}
+ if(view==='report'){var vc=visCols(REPORT_EN.length),qr=(q||'').trim().toLowerCase();var R=reportRows();if(qr)R=R.filter(function(a){return a.join(' ').toLowerCase().indexOf(qr)>=0;});R=cfApply('report',R);return {head:vc.map(function(i){return REPORT_EN[i];}),rows:R.map(function(a){return vc.map(function(i){return a[i];});})};}
  const D=view==='fin'?FIN:PUR;const HA=colIdx(D.head,'HAWB');const qs=(q||'').trim().toLowerCase();
- let rows=view==='pur'?D.rows.filter(r=>purHawbMatch(r[HA])):D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));return {head:D.head,rows:search(rows,qs)};}
+ let rows=view==='pur'?D.rows.filter(r=>purHawbMatch(r[HA])):D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));rows=cfApply(view,search(rows,qs));return {head:D.head,rows:rows};}
 function exportCSV(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
  const csv='﻿'+[o.head].concat(o.rows).map(r=>r.map(c=>'"'+String(c==null?'':c)+'"').join(',')).join('\n');
  const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download=(view==='fin'?'Finance':view==='sum'?'Summary_HAWB':view==='jm'?'Job_Master':view==='duty'?'Summary_Duty':view==='report'?'Report':'Purchase')+'.csv';a.click();}
