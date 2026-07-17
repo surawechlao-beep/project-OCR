@@ -285,14 +285,7 @@ function render(){
  const hi=colIdx(FIN.head,'HAWB');
  const hawbs=[...new Set(FIN.rows.map(r=>r[hi]))].filter(Boolean);
  if(view==='pur'){
-   var pHawbs=[...new Set(PUR.rows.map(r=>r[colIdx(PUR.head,'HAWB')]))].filter(Boolean);
-   var selN=purHawbSel===null?pHawbs.length:purHawbSel.length;
-   document.getElementById('filt').innerHTML='เลือก HAWB ('+selN+'/'+pHawbs.length+'): '
-    +'<a href="#" onclick="purHawbSel=null;render();return false" style="color:#2563eb;margin-right:4px">ทั้งหมด</a>·'
-    +'<a href="#" onclick="purHawbSel=[];render();return false" style="color:#2563eb;margin:0 4px">ล้าง</a>'
-    +'<span style="display:inline-flex;flex-wrap:wrap;gap:2px 8px;vertical-align:middle;max-width:640px">'
-    +pHawbs.map(h=>{var on=purHawbSel===null||purHawbSel.indexOf(h)>=0;return '<label style="font-size:11px;white-space:nowrap"><input type="checkbox" '+(on?'checked':'')+' onchange="togglePurHawb(\''+h+'\')"> '+esc(h)+'</label>';}).join('')
-    +'</span>';
+   document.getElementById('filt').innerHTML='<span class="muted">กรองด้วยปุ่ม ▾ ที่หัวคอลัมน์ (เลือกได้หลายค่า)</span>';
  } else {
    document.getElementById('filt').innerHTML='กรอง HAWB: <select onchange="filt=this.value;render()"><option value="ALL">ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(h=>'<option '+(filt===h?'selected':'')+'>'+h+'</option>').join('')+'</select>';
  }
@@ -312,16 +305,16 @@ function render(){
  rows=search(rows,qs);
  var preCF=rows;rows=cfApply(view,rows);
  const fFI=colIdx(D.head,'Freight Inv.'),fDH=colIdx(D.head,'DHL Duty Inv.'),fSys=colIdx(D.head,isFin?'Duty Invoice No.':'System No');
- let h='<thead><tr><th>แก้</th>'+cfThs(view,D.head,preCF,function(i){return isNum(D.head[i]);})+(isFin?'<th>Invoice Supplier</th>':'')+'</tr></thead><tbody>';
+ let h='<thead><tr><th>แก้</th>'+cfThs(view,D.head,preCF,function(i){return isNum(D.head[i]);})+(isFin?'<th>Invoice Supplier</th>':'<th>JOB</th><th>Cost sheet</th>')+'</tr></thead><tbody>';
  h+=rows.map(r=>{const oi=D.rows.indexOf(r);
    if(editView===view&&editIdx===oi){
      return '<tr style="background:#fffbe9">'+
        '<td style="white-space:nowrap"><button class="btn sm green" onclick="saveEdit('+oi+')">💾</button> <button class="btn sm ghost" onclick="cancelEdit()">✖</button></td>'+
-       D.head.map((_,i)=>'<td><input id="ec_'+i+'" value="'+esc(r[i])+'" style="width:'+(isNum(D.head[i])?'80':'130')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></td>').join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':'')+'</tr>';
+       D.head.map((_,i)=>'<td><input id="ec_'+i+'" value="'+esc(r[i])+'" style="width:'+(isNum(D.head[i])?'80':'130')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></td>').join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':purJCtd(r))+'</tr>';
    }
    return '<tr>'+
    '<td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ไขแถวนี้" onclick="startEdit('+oi+')">✏️</button></td>'+
-   r.map((c,i)=>{var val=isDate(D.head[i])?fmtDate(c):c;return '<td class="'+(isNum(D.head[i])?'num':'')+'">'+(qs&&!isNum(D.head[i])?hl(val,qs):esc(fmtCell(val)))+'</td>';}).join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':'')+'</tr>';}).join('');
+   r.map((c,i)=>{var val=isDate(D.head[i])?fmtDate(c):c;return '<td class="'+(isNum(D.head[i])?'num':'')+'">'+(qs&&!isNum(D.head[i])?hl(val,qs):esc(fmtCell(val)))+'</td>';}).join('')+(isFin?'<td class="sup">'+esc(supplierOf(r[fFI],r[fDH],r[fSys]))+'</td>':purJCtd(r))+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">'+(qs?'ไม่พบที่ตรง/ใกล้เคียง "'+esc(q)+'"':'ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง')+'</td></tr>';
  h+='</tbody>';
  document.getElementById('tb').innerHTML=h;
@@ -329,6 +322,17 @@ function render(){
 }
 function setView(v){view=v;var pf=document.getElementById('pf');if(pf)pf.classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');var ps=document.getElementById('ps');if(ps)ps.classList.toggle('on',v==='sum');var pj=document.getElementById('pj');if(pj)pj.classList.toggle('on',v==='jm');var pd2=document.getElementById('pd2');if(pd2)pd2.classList.toggle('on',v==='duty');var prep=document.getElementById('prep');if(prep)prep.classList.toggle('on',v==='report');if(v==='report')msbcType='report';render();}
 function purHawbMatch(h){return purHawbSel===null||purHawbSel.indexOf(String(h))>=0;}
+var POJOB=null,POJOBsig='';
+function poJobCS(po){ // หา Job No. Code + Ref. Cost Sheet No. จาก PO (Finance ก่อน, ไม่พบใช้ Job Master)
+ var sig=(FIN.rows?FIN.rows.length:0)+'/'+((JOBMASTER.rows||[]).length);
+ if(POJOB===null||POJOBsig!==sig){POJOB={};POJOBsig=sig;
+   var jH=colIdx(FIN.head,'Job No. Code'),cH=colIdx(FIN.head,'Ref. Cost Sheet No.'),pH=colIdx(FIN.head,'PO');
+   if(pH>=0)FIN.rows.forEach(function(r){var p=String(r[pH]||'');if(p&&!POJOB[p]&&(r[jH]||r[cH]))POJOB[p]={job:String(r[jH]||''),cs:String(r[cH]||'')};});
+   var jm=JOBMASTER.head||[],pi=colIdx(jm,'Ref. Docu No.'),ji=colIdx(jm,'Job No. Code'),ci=colIdx(jm,'Ref. Cost Sheet No.');
+   if(pi>=0)(JOBMASTER.rows||[]).forEach(function(r){var p=String(r[pi]||'');if(p&&!POJOB[p])POJOB[p]={job:String(r[ji]||''),cs:String(r[ci]||'')};});
+ }
+ return POJOB[String(po)]||{job:'',cs:''};}
+function purJCtd(r){var jc=poJobCS(r[colIdx(PUR.head,'PO')]);return '<td>'+esc(jc.job)+'</td><td>'+esc(jc.cs)+'</td>';}
 function togglePurHawb(h){h=String(h);var all=[...new Set(PUR.rows.map(function(r){return String(r[colIdx(PUR.head,'HAWB')]);}))].filter(Boolean);
  if(purHawbSel===null)purHawbSel=all.slice();
  var p=purHawbSel.indexOf(h);if(p>=0)purHawbSel.splice(p,1);else purHawbSel.push(h);render();}
@@ -484,7 +488,9 @@ function curFiltered(){
  if(view==='duty'){var qd=(q||'').trim().toLowerCase();var rd=dutyRows();if(qd)rd=rd.filter(function(a){return a.join(' ').toLowerCase().indexOf(qd)>=0;});rd=cfApply('duty',rd);return {head:dutyItem?DUTY_HEAD_ITEM:DUTY_HEAD,rows:rd};}
  if(view==='report'){var vc=visCols(REPORT_EN.length),qr=(q||'').trim().toLowerCase();var R=reportRows();if(qr)R=R.filter(function(a){return a.join(' ').toLowerCase().indexOf(qr)>=0;});R=cfApply('report',R);return {head:vc.map(function(i){return REPORT_EN[i];}),rows:R.map(function(a){return vc.map(function(i){return a[i];});})};}
  const D=view==='fin'?FIN:PUR;const HA=colIdx(D.head,'HAWB');const qs=(q||'').trim().toLowerCase();
- let rows=view==='pur'?D.rows.filter(r=>purHawbMatch(r[HA])):D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));rows=cfApply(view,search(rows,qs));return {head:D.head,rows:rows};}
+ let rows=view==='pur'?D.rows.filter(r=>purHawbMatch(r[HA])):D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt));rows=cfApply(view,search(rows,qs));
+ if(view==='pur'){var poi=colIdx(D.head,'PO');return {head:D.head.concat(['JOB','Cost sheet']),rows:rows.map(function(r){var jc=poJobCS(r[poi]);return r.concat([jc.job,jc.cs]);})};}
+ return {head:D.head,rows:rows};}
 function exportCSV(){const o=curFiltered();if(!o.rows.length){alert('ไม่มีข้อมูล');return;}
  const csv='﻿'+[o.head].concat(o.rows).map(r=>r.map(c=>'"'+String(c==null?'':c)+'"').join(',')).join('\n');
  const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download=(view==='fin'?'Finance':view==='sum'?'Summary_HAWB':view==='jm'?'Job_Master':view==='duty'?'Summary_Duty':view==='report'?'Report':'Purchase')+'.csv';a.click();}
