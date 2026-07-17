@@ -333,23 +333,30 @@ function togglePurHawb(h){h=String(h);var all=[...new Set(PUR.rows.map(function(
  if(purHawbSel===null)purHawbSel=all.slice();
  var p=purHawbSel.indexOf(h);if(p>=0)purHawbSel.splice(p,1);else purHawbSel.push(h);render();}
 // ---- Summary Duty — สรุปอากร/VAT ต่อ Job (PO/JOB/Cosheet) ----
-var DUTY_HEAD=['No.','HAWB','PO.','Department','JOB','Cost sheet','Customer Name','Duty','Vat','Total'];
-var DUTY_HEAD_ITEM=['No.','HAWB','PO.','Department','JOB','Cost sheet','Part No. (PD)','Duty','Vat','Total'];
+var DUTY_HEAD=['No.','วันที่อัปโหลด','HAWB','PO.','Department','JOB','Cost sheet','Supplier','Customer Name','Duty','Vat','Total'];
+var DUTY_HEAD_ITEM=['No.','วันที่อัปโหลด','HAWB','PO.','Department','JOB','Cost sheet','Supplier','Part No. (PD)','Duty','Vat','Total'];
 function dutyRows(){
  var iHA=colIdx(FIN.head,'HAWB'),iPO=colIdx(FIN.head,'PO'),iDept=colIdx(FIN.head,'Department'),
      iJob=colIdx(FIN.head,'Job No. Code'),iCS=colIdx(FIN.head,'Ref. Cost Sheet No.'),
-     iPD=colIdx(FIN.head,'Part No. (PD)'),iD=colIdx(FIN.head,'Import Duty'),iV=colIdx(FIN.head,'VAT');
+     iPD=colIdx(FIN.head,'Part No. (PD)'),iD=colIdx(FIN.head,'Import Duty'),iV=colIdx(FIN.head,'VAT'),
+     iUp=colIdx(FIN.head,'Upload Date'),iDInv=colIdx(FIN.head,'Duty Invoice No.'),
+     iFInv=colIdx(FIN.head,'Freight Inv.'),iDHL=colIdx(FIN.head,'DHL Duty Inv.');
+ var out;
  if(dutyItem){ // รายไอเทม (หลายบรรทัด) — 1 บรรทัด/สินค้า
-   return FIN.rows.map(function(r,n){var d=parseFloat(r[iD])||0,v=parseFloat(r[iV])||0;
-     return [n+1,String(r[iHA]||''),String(r[iPO]||''),String(r[iDept]||''),String(r[iJob]||''),String(r[iCS]||''),String(r[iPD]||''),d,v,d+v];});
+   out=FIN.rows.map(function(r){var d=parseFloat(r[iD])||0,v=parseFloat(r[iV])||0;
+     return [0,String(r[iUp]||''),String(r[iHA]||''),String(r[iPO]||''),String(r[iDept]||''),String(r[iJob]||''),String(r[iCS]||''),supplierOf(r[iFInv],r[iDHL],r[iDInv]),String(r[iPD]||''),d,v,d+v];});
+ } else {
+   var map={},order=[];
+   FIN.rows.forEach(function(r){
+     var ha=String(r[iHA]||''),po=String(r[iPO]||''),dept=String(r[iDept]||''),job=String(r[iJob]||''),cs=String(r[iCS]||''),key=ha+'|'+po+'|'+dept+'|'+job+'|'+cs;
+     if(!map[key]){map[key]={up:String(r[iUp]||''),ha:ha,po:po,dept:dept,job:job,cs:cs,sup:supplierOf(r[iFInv],r[iDHL],r[iDInv]),duty:0,vat:0};order.push(key);}
+     map[key].duty+=parseFloat(r[iD])||0; map[key].vat+=parseFloat(r[iV])||0;
+   });
+   out=order.map(function(k){var g=map[k];return [0,g.up,g.ha,g.po,g.dept,g.job,g.cs,g.sup,'',g.duty,g.vat,g.duty+g.vat];});
  }
- var map={},order=[];
- FIN.rows.forEach(function(r){
-   var ha=String(r[iHA]||''),po=String(r[iPO]||''),dept=String(r[iDept]||''),job=String(r[iJob]||''),cs=String(r[iCS]||''),key=ha+'|'+po+'|'+dept+'|'+job+'|'+cs;
-   if(!map[key]){map[key]={ha:ha,po:po,dept:dept,job:job,cs:cs,duty:0,vat:0};order.push(key);}
-   map[key].duty+=parseFloat(r[iD])||0; map[key].vat+=parseFloat(r[iV])||0;
- });
- return order.map(function(k,n){var g=map[k];return [n+1,g.ha,g.po,g.dept,g.job,g.cs,'',g.duty,g.vat,g.duty+g.vat];});
+ out.reverse(); // ล่าสุดอยู่บน
+ out.forEach(function(a,n){a[0]=n+1;});
+ return out;
 }
 function renderDuty(){
  q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
@@ -360,17 +367,17 @@ function renderDuty(){
    ' <span class="muted">'+(dutyItem?'1 บรรทัด/สินค้า':'1 บรรทัด/Job — Customer Name เติมเองได้')+'</span>';
  var rows=dutyRows(); if(qs)rows=rows.filter(function(a){return a.join(' ').toLowerCase().indexOf(qs)>=0;});
  var preCF=rows;rows=cfApply('duty',rows);
- var tD=rows.reduce(function(s,a){return s+a[7];},0),tV=rows.reduce(function(s,a){return s+a[8];},0);
+ var tD=rows.reduce(function(s,a){return s+a[9];},0),tV=rows.reduce(function(s,a){return s+a[10];},0);
  document.getElementById('stats').innerHTML=
   '<div class="card"><div class="k">'+(dutyItem?'จำนวนไอเทม':'จำนวน Job')+'</div><div class="v">'+rows.length+'</div></div>'+
   '<div class="card"><div class="k">อากรรวม</div><div class="v">'+fmtCell(tD)+'<small> ฿</small></div></div>'+
   '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(tV)+'<small> ฿</small></div></div>'+
   '<div class="card"><div class="k">รวมทั้งสิ้น</div><div class="v">'+fmtCell(tD+tV)+'<small> ฿</small></div></div>';
- var numc={0:1,7:1,8:1,9:1};
+ var numc={0:1,9:1,10:1,11:1};
  var h='<thead><tr>'+cfThs('duty',HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
- h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=7?fmtCell(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
+ h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=9?fmtCell(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
- h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmtCell(tD)+'</td><td class="num">'+fmtCell(tV)+'</td><td class="num">'+fmtCell(tD+tV)+'</td></tr></tbody>';
+ h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmtCell(tD)+'</td><td class="num">'+fmtCell(tV)+'</td><td class="num">'+fmtCell(tD+tV)+'</td></tr></tbody>';
  document.getElementById('tb').innerHTML=h;
  document.getElementById('dbnote').innerHTML='Summary Duty ('+(dutyItem?'รายไอเทม':'รวมต่อ Job')+') • Total = Duty + Vat • กด ⬇ Excel เพื่อออกรายงาน';
 }
