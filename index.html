@@ -356,7 +356,7 @@ function dutyRows(){
      if(!map[key]){map[key]={up:String(r[iUp]||''),ha:ha,po:po,dept:dept,job:job,cs:cs,sup:supplierOf(r[iFInv],r[iDHL],r[iDInv]),duty:0,vat:0};order.push(key);}
      map[key].duty+=parseFloat(r[iD])||0; map[key].vat+=parseFloat(r[iV])||0;
    });
-   out=order.map(function(k){var g=map[k];return [0,g.up,g.ha,g.po,g.dept,g.job,g.cs,g.sup,'',g.duty,g.vat,g.duty+g.vat];});
+   out=order.map(function(k){var g=map[k];var d=Math.floor(g.duty+1e-6),v=Math.floor(g.vat+1e-6);return [0,g.up,g.ha,g.po,g.dept,g.job,g.cs,g.sup,'',d,v,d+v];});
  }
  out.reverse(); // ล่าสุดอยู่บน
  out.forEach(function(a,n){a[0]=n+1;});
@@ -383,7 +383,7 @@ function renderDuty(){
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
  h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmtCell(tD)+'</td><td class="num">'+fmtCell(tV)+'</td><td class="num">'+fmtCell(tD+tV)+'</td></tr></tbody>';
  document.getElementById('tb').innerHTML=h;
- document.getElementById('dbnote').innerHTML='Summary Duty ('+(dutyItem?'รายไอเทม':'รวมต่อ Job')+') • Total = Duty + Vat • กด ⬇ Excel เพื่อออกรายงาน';
+ document.getElementById('dbnote').innerHTML='Summary Duty ('+(dutyItem?'รายไอเทม (ค่าดิบรายชิ้น)':'รวมต่อ Job — Duty/Vat ปัดลงจำนวนเต็มตามที่จ่ายจริง (ตรงกล่องใบขน)')+') • Total = Duty + Vat • กด ⬇ Excel เพื่อออกรายงาน';
 }
 // ---- Report (ฟอร์แมตเต็ม) — ย้ายมาจาก MSBC มาไว้หน้าฐานข้อมูล ----
 function toggleColR(i){if(reportColSel===null){reportColSel=[];for(var k=0;k<REPORT_EN.length;k++)reportColSel.push(k);}var p=reportColSel.indexOf(i);if(p>=0)reportColSel.splice(p,1);else reportColSel.push(i);render();}
