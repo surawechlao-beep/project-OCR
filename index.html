@@ -135,6 +135,7 @@ mark{background:#fff3a8}
       <span class="pill" id="mt2" onclick="msbcType='glifreight';renderMSBC()">GLI FREIGHT</span>
       <span class="pill" id="mt3" onclick="msbcType='dhlduty';renderMSBC()">DHL DUTY</span>
       <span class="pill" id="mt4" onclick="msbcType='dhlfreight';renderMSBC()">DHL FREIGHT</span>
+      &nbsp; <input id="mq" placeholder="🔍 ค้นในตาราง" oninput="renderMSBC()" style="padding:5px 9px;border:1px solid #cdd8ea;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
     </div>
     <button class="btn" id="mcolbtn" onclick="toggleColPanel()" style="display:none">🔧 เลือกคอลัมน์</button>
     <button class="btn" id="mcopy" onclick="copyMSBC()">📋 คัดลอกทั้งตาราง</button>
@@ -155,8 +156,8 @@ var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (nul
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
- var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight');
- fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null};});}
+ var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No');
+ fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):''};});}
 var view='report',filt='ALL',q='',editIdx=-1,editView='',dutyItem=false,repColOpen=false;
 function startEdit(i){editIdx=i;editView=view;render();}
 function cancelEdit(){editIdx=-1;editView='';render();}
@@ -174,6 +175,21 @@ async function saveEdit(i){
  }catch(e){ov.style.display='none';alert('บันทึกไม่ได้: '+(e.message||e)+'\n(เช็คว่า Apps Script deploy เวอร์ชันใหม่ที่มี updaterow แล้ว)');}
 }
 
+// ---- แก้ไขแถวต้นทาง Finance จากทุกหน้า (Summary Duty / Report / รวม HAWB) ----
+var editFin=-1;
+function editFinRow(fi){if(fi===undefined||fi===null||fi<0){alert('แถวนี้ยังไม่มีข้อมูลใน Finance ให้แก้');return;}editFin=(editFin===fi?-1:fi);render();}
+function cancelFinEdit(){editFin=-1;render();}
+async function saveFinEdit(){var i=editFin;if(i<0)return;
+ var vals=FIN.head.map(function(_,c){var el=document.getElementById('ef_'+c);return el?el.value:FIN.rows[i][c];});
+ var ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='💾 บันทึกกลับฐานข้อมูลกลาง...';
+ try{var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'updaterow',sheet:'finance',rowIndex:i,values:vals})});
+   var j=await r.json();if(!j||!j.ok)throw new Error((j&&j.error)||'save failed');
+   FIN.rows[i]=vals.map(function(v){return v!==''&&!isNaN(v)?parseFloat(v):v;});editFin=-1;ov.style.display='none';render();
+   document.getElementById('dbnote').innerHTML='✅ บันทึกแถวต้นทาง (Finance) แล้ว — ทุกหน้าจะอัปเดตตาม (รีเฟรชเพื่อให้คนอื่นเห็น)';
+ }catch(e){ov.style.display='none';alert('บันทึกไม่ได้: '+(e.message||e)+'\n(เช็คว่า Apps Script deploy มี updaterow แล้ว)');}}
+function finEditorTR(){var i=editFin,r=FIN.rows[i];if(!r)return '';
+ var inputs=FIN.head.map(function(hn,c){return '<label style="font-size:10px;color:#64748b;display:inline-flex;flex-direction:column;margin:2px 6px 2px 0">'+esc(hn)+'<input id="ef_'+c+'" value="'+esc(r[c])+'" style="width:'+(isNum(hn)?'82':'118')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></label>';}).join('');
+ return '<tr style="background:#fffbe9"><td colspan="99"><div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 4px;padding:6px"><b style="width:100%;font-size:11px;color:#b45309">✏️ แก้ไขข้อมูลต้นทาง Finance — HAWB '+esc(r[colIdx(FIN.head,'HAWB')])+(r[colIdx(FIN.head,'Part No. (PD)')]?' · '+esc(r[colIdx(FIN.head,'Part No. (PD)')]):'')+'</b>'+inputs+'<span style="margin-left:8px;align-self:center"><button class="btn sm green" onclick="saveFinEdit()">💾 บันทึก</button> <button class="btn sm ghost" onclick="cancelFinEdit()">✖</button></span></div></td></tr>';}
 function tab(n){document.querySelectorAll('.screen').forEach((e,i)=>e.classList.toggle('on',i===n));
  document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('active',i===n));if(n===1)render();if(n===2){if(msbcType==='report'||msbcType==='test')msbcType='gliduty';renderMSBC();}}
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
@@ -348,16 +364,16 @@ function dutyRows(){
      iFInv=colIdx(FIN.head,'Freight Inv.'),iDHL=colIdx(FIN.head,'DHL Duty Inv.');
  var out;
  if(dutyItem){ // รายไอเทม (หลายบรรทัด) — 1 บรรทัด/สินค้า
-   out=FIN.rows.map(function(r){var d=parseFloat(r[iD])||0,v=parseFloat(r[iV])||0;
-     return [0,String(r[iUp]||''),String(r[iHA]||''),String(r[iPO]||''),String(r[iDept]||''),String(r[iJob]||''),String(r[iCS]||''),supplierOf(r[iFInv],r[iDHL],r[iDInv]),String(r[iPD]||''),d,v,d+v];});
+   out=FIN.rows.map(function(r,fi){var d=parseFloat(r[iD])||0,v=parseFloat(r[iV])||0;
+     var a=[0,String(r[iUp]||''),String(r[iHA]||''),String(r[iPO]||''),String(r[iDept]||''),String(r[iJob]||''),String(r[iCS]||''),supplierOf(r[iFInv],r[iDHL],r[iDInv]),String(r[iPD]||''),d,v,d+v];a._fi=fi;return a;});
  } else {
    var map={},order=[];
-   FIN.rows.forEach(function(r){
+   FIN.rows.forEach(function(r,fi){
      var ha=String(r[iHA]||''),po=String(r[iPO]||''),dept=String(r[iDept]||''),job=String(r[iJob]||''),cs=String(r[iCS]||''),key=ha+'|'+po+'|'+dept+'|'+job+'|'+cs;
-     if(!map[key]){map[key]={up:String(r[iUp]||''),ha:ha,po:po,dept:dept,job:job,cs:cs,sup:supplierOf(r[iFInv],r[iDHL],r[iDInv]),duty:0,vat:0};order.push(key);}
+     if(!map[key]){map[key]={fi:fi,up:String(r[iUp]||''),ha:ha,po:po,dept:dept,job:job,cs:cs,sup:supplierOf(r[iFInv],r[iDHL],r[iDInv]),duty:0,vat:0};order.push(key);}
      map[key].duty+=parseFloat(r[iD])||0; map[key].vat+=parseFloat(r[iV])||0;
    });
-   out=order.map(function(k){var g=map[k];var d=Math.floor(g.duty+1e-6),v=Math.floor(g.vat+1e-6);return [0,g.up,g.ha,g.po,g.dept,g.job,g.cs,g.sup,'',d,v,d+v];});
+   out=order.map(function(k){var g=map[k];var d=Math.floor(g.duty+1e-6),v=Math.floor(g.vat+1e-6);var a=[0,g.up,g.ha,g.po,g.dept,g.job,g.cs,g.sup,'',d,v,d+v];a._fi=g.fi;return a;});
  }
  out.reverse(); // ล่าสุดอยู่บน
  out.forEach(function(a,n){a[0]=n+1;});
@@ -379,10 +395,10 @@ function renderDuty(){
   '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmt2(tV)+'<small> ฿</small></div></div>'+
   '<div class="card"><div class="k">รวมทั้งสิ้น</div><div class="v">'+fmt2(tD+tV)+'<small> ฿</small></div></div>';
  var numc={0:1,9:1,10:1,11:1};
- var h='<thead><tr>'+cfThs('duty',HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
- h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=9?fmt2(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
+ var h='<thead><tr><th>แก้</th>'+cfThs('duty',HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
+ h+=rows.map(function(a){if(editFin===a._fi)return finEditorTR();return '<tr><td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ต้นทาง Finance" onclick="editFinRow('+(a._fi==null?-1:a._fi)+')">✏️</button></td>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+(i>=9?fmt2(v):esc(v))+'</td>';}).join('')+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
- h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmt2(tD)+'</td><td class="num">'+fmt2(tV)+'</td><td class="num">'+fmt2(tD+tV)+'</td></tr></tbody>';
+ h+='<tr style="font-weight:700;background:#eef3fb"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td>รวม</td><td class="num">'+fmt2(tD)+'</td><td class="num">'+fmt2(tV)+'</td><td class="num">'+fmt2(tD+tV)+'</td></tr></tbody>';
  document.getElementById('tb').innerHTML=h;
  document.getElementById('dbnote').innerHTML='Summary Duty ('+(dutyItem?'รายไอเทม (ค่าดิบรายชิ้น)':'รวมต่อ Job — Duty/Vat ปัดลงจำนวนเต็มตามที่จ่ายจริง (ตรงกล่องใบขน)')+') • Total = Duty + Vat • กด ⬇ Excel เพื่อออกรายงาน';
 }
@@ -406,8 +422,8 @@ function renderReport(){
      '<div class="card"><div class="k">คอลัมน์</div><div class="v">'+vc.length+'/'+COLS.length+'</div></div>';
  }
  CFROWS['report']=preCF;
- var h='<thead><tr>'+vc.map(function(i){return '<th class="'+(isN(i)?'num':'')+'" style="font-size:11px"><div class="thl">'+esc(COLS[i])+'</div>'+cfBtn('report',i)+'</th>';}).join('')+'</tr></thead><tbody>';
- h+=R.map(function(a){return '<tr>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(repMoney(i)?fmtMoney(a[i]):msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
+ var h='<thead><tr><th>แก้</th>'+vc.map(function(i){return '<th class="'+(isN(i)?'num':'')+'" style="font-size:11px"><div class="thl">'+esc(COLS[i])+'</div>'+cfBtn('report',i)+'</th>';}).join('')+'</tr></thead><tbody>';
+ h+=R.map(function(a){if(editFin===a._fi)return finEditorTR();return '<tr><td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ต้นทาง Finance" onclick="editFinRow('+(a._fi==null?-1:a._fi)+')">✏️</button></td>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(repMoney(i)?fmtMoney(a[i]):msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
  if(!R.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
  h+='</tbody>';
  document.getElementById('tb').innerHTML=h;
@@ -442,13 +458,13 @@ function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=
    var b=r[pci('Shipper')];if(b)pmap[h].br[b]=1;var o=r[pci('Country of Dispatch')];if(o)pmap[h].or[o]=1;
    var u=r[pci('Upload Date')];if(u&&!pmap[h].up)pmap[h].up=u;});
  var order=[],map={};
- FIN.rows.forEach(function(r){var h=String(r[iHA]);if(!map[h]){map[h]={hawb:h,items:0,pos:{},date:r[ci('Date')],sys:r[ci('Duty Invoice No.')],w:0,duty:0,bv:0,vat:0,da:0,finv:r[ci('Freight Inv.')],dhl:r[ci('DHL Duty Inv.')]};order.push(h);}
+ FIN.rows.forEach(function(r,fi){var h=String(r[iHA]);if(!map[h]){map[h]={fi:fi,hawb:h,items:0,pos:{},date:r[ci('Date')],sys:r[ci('Duty Invoice No.')],w:0,duty:0,bv:0,vat:0,da:0,finv:r[ci('Freight Inv.')],dhl:r[ci('DHL Duty Inv.')]};order.push(h);}
    var o=map[h];o.items++;o.pos[r[ci('PO')]]=1;o.w+=parseFloat(r[ci('Gross')])||0;o.duty+=parseFloat(r[ci('Import Duty')])||0;o.bv+=parseFloat(r[ci('Before VAT')])||0;o.vat+=parseFloat(r[ci('VAT')])||0;o.da+=parseFloat(r[ci('Duty Amount')])||0;});
  return order.map(function(h){var o=map[h];var F=FRTMAP[String(h)];var hw=(F&&F.hwt!=null)?F.hwt:'—';
    var p=pmap[String(h)]||{br:{},or:{},up:''};
    var fsumRaw=F?((F.air||0)+(F.clear||0)+(F.ot||0)+(F.term||0)):0;
    var fchg=F?r2(F.air):'', fclr=F?r2((F.clear||0)+(F.ot||0)+(F.term||0)):'', fsum=F?r2(fsumRaw):'', fusd=F?r2(fsumRaw/33.5):'';   // Freight USD = (Freight+Clearing) / 33.5
-   return [p.up?fmtDate(p.up):'', o.hawb, Object.keys(o.pos).join(', '), Object.keys(p.br).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), fchg, fclr, fsum, fusd, o.finv||'', Object.keys(p.or).join(', ')];}).reverse();}   // ล่าสุด (HAWB ที่เพิ่มทีหลัง) อยู่บนสุด
+   var a=[p.up?fmtDate(p.up):'', o.hawb, Object.keys(o.pos).join(', '), Object.keys(p.br).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), fchg, fclr, fsum, fusd, o.finv||'', Object.keys(p.or).join(', ')];a._fi=o.fi;return a;}).reverse();}   // ล่าสุด (HAWB ที่เพิ่มทีหลัง) อยู่บนสุด
 function renderSum(){
  q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
  var hi=colIdx(FIN.head,'HAWB');
@@ -464,8 +480,8 @@ function renderSum(){
    '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(tV)+'<small> ฿</small></div></div>'+
    '<div class="card"><div class="k">ค่าส่งรวม</div><div class="v">'+fmtCell(tF)+'<small> ฿</small></div></div>';
  var numc={4:1,8:1,9:1,10:1,11:1,12:1,13:1,14:1,15:1,16:1,17:1};
- var h='<thead><tr>'+cfThs('sum',SUM_HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
- h+=rows.map(function(a){return '<tr>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+esc(fmtCell(v))+'</td>';}).join('')+'</tr>';}).join('');
+ var h='<thead><tr><th>แก้</th>'+cfThs('sum',SUM_HEAD,preCF,function(i){return !!numc[i];})+'</tr></thead><tbody>';
+ h+=rows.map(function(a){if(editFin===a._fi)return finEditorTR();return '<tr><td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ต้นทาง Finance" onclick="editFinRow('+(a._fi==null?-1:a._fi)+')">✏️</button></td>'+a.map(function(v,i){return '<td class="'+(numc[i]?'num':'')+'">'+esc(fmtCell(v))+'</td>';}).join('')+'</tr>';}).join('');
  if(!rows.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
  h+='</tbody>';
  document.getElementById('tb').innerHTML=h;
@@ -541,7 +557,7 @@ function reportRows(){
  if(!FIN.rows.length)return [];
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var sel=(msbcHAWB==='ALL')?null:String(msbcHAWB);
- var rows=FIN.rows.filter(function(r){return sel===null||String(r[ci('HAWB')])===sel;});
+ var rows=[],ridx=[];FIN.rows.forEach(function(r,gi){if(sel===null||String(r[ci('HAWB')])===sel){rows.push(r);ridx.push(gi);}});
  var totW={},lastIdx={},firstIdx={};
  rows.forEach(function(r,i){var h=String(r[ci('HAWB')]);totW[h]=(totW[h]||0)+(+r[ci('Gross')]||0);lastIdx[h]=i;if(firstIdx[h]===undefined)firstIdx[h]=i;});
  var g=function(r,n){return r[ci(n)];};
@@ -555,18 +571,22 @@ function reportRows(){
    pen=(isFirst&&F.pen)?F.pen:'';bond=(isFirst&&F.bond)?F.bond:'';vreg=(isFirst&&F.vreg)?F.vreg:'';
   }else{frtInv=g(r,'Freight Inv.');frtChg=g(r,'Freight Charge');amt=g(r,'Freight Actual');clr=trn=fvat=cust=ot=term=tvat=ins=ivat='';}
   var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'),g(r,'Duty Invoice No.'));
-  return [h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Part No. (PD)'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
+  var out=[h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Part No. (PD)'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
    w, wa, g(r,'Duty Invoice No.'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
    g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup];
+  out._fi=ridx[i];return out;
  });
 }
 function lineToArr(o){var q=o.Qty==null?1:o.Qty,cost=+o.Cost||0;
  return ['','','',o.Type||'',o.No||'',o.PartNo||'',o.GLName||'',o.Desc||'','',q,o.UoM||'',cost,o.Disc==null?'':o.Disc,r2(q*cost),'',o.GenProd||'',o.VATProd||'',o.WHT||'',o.Remark||'',o.RefCS==null?'':o.RefCS,o.RefCSLine==null?'':o.RefCSLine,'',o.Dept||'VP',o.Job||'',o.ItemNo||'',o.ItemCat||'','','','','','','','','',''];}
+function isGliHawb(h){var HA=colIdx(FIN.head,'HAWB'),DI=colIdx(FIN.head,'Duty Invoice No.'),di='';for(var i=0;i<(FIN.rows||[]).length;i++){if(String(FIN.rows[i][HA])===String(h)){di=String(FIN.rows[i][DI]||'');break;}}
+ // GLI = เลขใบขน PPOV/IVAI · DHL = QECL · (เผื่อ HAWB ไม่ขึ้น S00 เช่น AE3466 ของ Trillium ก็ยังเป็น GLI)
+ if(di.indexOf('PPOV')===0||di.indexOf('IVAI')===0)return true; if(di.indexOf('QECL')===0)return false; return String(h).indexOf('S00')===0;}
 function msbcGenOne(hawb){
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var rows=FIN.rows.filter(function(r){return String(r[ci('HAWB')])===String(hawb);});
  if(!rows.length)return [];
- var gli=String(hawb).indexOf('S00')===0, sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
+ var gli=isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
  var kind=msbcType.indexOf('freight')>=0?'freight':'duty';
  var F=FRTMAP[hawb], sw=rows.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)||1;
  var d0=rows[0][ci('Department')]||'VP', j0=rows[0][ci('Job No. Code')]||'Z-STOCK';
@@ -582,7 +602,7 @@ function msbcGenOne(hawb){
    L.push({HAWB:hawb,Type:'Item',No:'Z-IMPORT-TAX',Desc:'Z-IMPORT-TAX - '+g.po,Cost:Math.floor(g.duty),UoM:'UNIT',GenProd:'5112004',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:60000,Dept:g.dept,Job:g.job,ItemNo:'Z-IMPORT-TAX',ItemCat:'Z-OTHERS'});});
   if(!gli&&F&&F.vat>0) vatPair(r2(F.vat*100/7), dhlInv+' - DHL EXPRESS INTERNATIONAL (THAILAND) LTD.');   // DHL: INPUT VAT ค่าเคลียร์
   var vsum=rows.reduce(function(a,r){return a+(+r[ci('VAT')]||0);},0), base=vsum>0?r2(Math.floor(vsum)*100/7):0;   // ฐาน = floor(ΣVAT)x100/7
-  if(base>0) vatPair(base, (gli?sys:'1190')+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
+  if(base>0) vatPair(base, (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
   if(gli){
    groups.forEach(function(g){
@@ -604,8 +624,8 @@ function msbcGen(){
  if(!FIN.rows.length)return [];
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var hawbs=(msbcHAWB==='ALL')?[...new Set(FIN.rows.map(function(r){return r[ci('HAWB')];}))].filter(Boolean):[msbcHAWB];
- var wantGli=msbcType.indexOf('gli')===0;   // แยกตาม forwarder ของแถบ (GLI = HAWB ขึ้นต้น S00)
- hawbs=hawbs.filter(function(h){return (String(h).indexOf('S00')===0)===wantGli;});
+ var wantGli=msbcType.indexOf('gli')===0;   // แยกตาม forwarder: GLI = ใบขน PPOV/IVAI · DHL = QECL
+ hawbs=hawbs.filter(function(h){return isGliHawb(h)===wantGli;});
  var L=[];hawbs.forEach(function(h){L=L.concat(msbcGenOne(h));});return L;
 }
 function msbcCell(v){return v==null?'':(typeof v==='number'?(''+v):v);}
@@ -623,6 +643,7 @@ function renderMSBC(){
  if(msbcType==='report'||msbcType==='test'){
    var isRep=msbcType==='report';
    var COLS=isRep?REPORT_EN:TEST_EN, R=isRep?reportRows():testRows();
+   var mq=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();if(mq)R=R.filter(function(a){return a.join(' ').toLowerCase().indexOf(mq)>=0;});
    var vc=visCols(COLS.length);
    if(mcb)mcb.style.display='';
    document.getElementById('mtb').className='rep';
@@ -641,6 +662,7 @@ function renderMSBC(){
  if(mcb)mcb.style.display='';
  document.getElementById('mtb').className='';
  var L=msbcGen();
+ var mq=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();if(mq)L=L.filter(function(o){return lineToArr(o).join(' ').toLowerCase().indexOf(mq)>=0;});
  var vc=visCols(MSBC_COLS.length);
  var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MSBC_COLS.length+' คอลัมน์');
  var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT'}[msbcType]||msbcType;
