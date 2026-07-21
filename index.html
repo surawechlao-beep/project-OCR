@@ -318,7 +318,7 @@ function render(){
   '<div class="card"><div class="k">VAT รวม</div><div class="v">'+fmtCell(sum(frows,fV))+'<small> ฿</small></div></div>';
  const HA=colIdx(D.head,'HAWB');
  const isFin=view==='fin';
- let rows=isFin?D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt)):D.rows.filter(r=>purHawbMatch(r[HA]));
+ let rows=isFin?D.rows.filter(r=>filt==='ALL'||String(r[HA])===String(filt)):D.rows.filter(r=>purHawbMatch(r[HA])).reverse();   // Purchase: ล่าสุดอยู่บน
  rows=search(rows,qs);
  var preCF=rows;rows=cfApply(view,rows);
  const fFI=colIdx(D.head,'Freight Inv.'),fDH=colIdx(D.head,'DHL Duty Inv.'),fSys=colIdx(D.head,isFin?'Duty Invoice No.':'System No');
@@ -464,7 +464,8 @@ function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=
    var p=pmap[String(h)]||{br:{},or:{},up:''};
    var fsumRaw=F?((F.air||0)+(F.clear||0)+(F.ot||0)+(F.term||0)):0;
    var fchg=F?r2(F.air):'', fclr=F?r2((F.clear||0)+(F.ot||0)+(F.term||0)):'', fsum=F?r2(fsumRaw):'', fusd=F?r2(fsumRaw/33.5):'';   // Freight USD = (Freight+Clearing) / 33.5
-   var a=[p.up?fmtDate(p.up):'', o.hawb, Object.keys(o.pos).join(', '), Object.keys(p.br).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(o.finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), fchg, fclr, fsum, fusd, o.finv||'', Object.keys(p.or).join(', ')];a._fi=o.fi;return a;}).reverse();}   // ล่าสุด (HAWB ที่เพิ่มทีหลัง) อยู่บนสุด
+   var finv=(F&&F.inv)?F.inv:(o.finv||'');   // Freight Inv. ดึงจากชีต Freight ก่อน (IVAI/BKKIR) ไม่งั้นใช้ของ Finance
+   var a=[p.up?fmtDate(p.up):'', o.hawb, Object.keys(o.pos).join(', '), Object.keys(p.br).join(', '), o.items, fmtDate(o.date), o.sys, supplierOf(finv,o.dhl,o.sys), hw, r2(o.duty), r2(o.bv), r2(o.vat), r2(o.da), freightTotOf(h), fchg, fclr, fsum, fusd, finv, Object.keys(p.or).join(', ')];a._fi=o.fi;return a;}).reverse();}   // ล่าสุด (HAWB ที่เพิ่มทีหลัง) อยู่บนสุด
 function renderSum(){
  q=(document.getElementById('q')||{}).value||'';var qs=q.trim().toLowerCase();
  var hi=colIdx(FIN.head,'HAWB');
