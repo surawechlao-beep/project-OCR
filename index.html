@@ -189,9 +189,21 @@ async function saveFinEdit(){var i=editFin;if(i<0)return;   // i = _ri (index �
    editFin=-1;ov.style.display='none';render();
    document.getElementById('dbnote').innerHTML='✅ บันทึกแถวต้นทาง (Finance) แล้ว — ทุกหน้าจะอัปเดตตาม (รีเฟรชเพื่อให้คนอื่นเห็น)';
  }catch(e){ov.style.display='none';alert('บันทึกไม่ได้: '+(e.message||e)+'\n(เช็คว่า Apps Script deploy มี updaterow แล้ว)');}}
+// ตัดเวลาออกจากค่าวันที่ (Sheets ส่งกลับมาเป็น 2026-07-18T07:00:00.000Z) -> 2026-07-18
+function dOnly(v){var s=String(v==null?'':v);var m=s.match(/^(\d{4}-\d{2}-\d{2})T/);return m?m[1]:s;}
 function finEditorTR(){var i=editFin,r=FIN_ALL.rows[i];if(!r)return '';
- var inputs=FIN.head.map(function(hn,c){return '<label style="font-size:10px;color:#64748b;display:inline-flex;flex-direction:column;margin:2px 6px 2px 0">'+esc(hn)+'<input id="ef_'+c+'" value="'+esc(r[c])+'" style="width:'+(isNum(hn)?'82':'118')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></label>';}).join('');
- return '<tr style="background:#fffbe9"><td colspan="99"><div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 4px;padding:6px"><b style="width:100%;font-size:11px;color:#b45309">✏️ แก้ไขข้อมูลต้นทาง Finance — HAWB '+esc(r[colIdx(FIN.head,'HAWB')])+(r[colIdx(FIN.head,'Part No. (PD)')]?' · '+esc(r[colIdx(FIN.head,'Part No. (PD)')]):'')+'</b>'+inputs+'<span style="margin-left:8px;align-self:center"><button class="btn sm green" onclick="saveFinEdit()">💾 บันทึก</button> <button class="btn sm ghost" onclick="cancelFinEdit()">✖</button></span></div></td></tr>';}
+ var inputs=FIN.head.map(function(hn,c){return '<label style="font-size:10px;color:#64748b;display:inline-flex;flex-direction:column;margin:2px 6px 2px 0">'+esc(hn)+'<input id="ef_'+c+'" value="'+esc(dOnly(r[c]))+'" style="width:'+(isNum(hn)?'82':'118')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></label>';}).join('');
+ var ttl='✏️ แก้ไขข้อมูลต้นทาง Finance — HAWB '+esc(r[colIdx(FIN.head,'HAWB')])+(r[colIdx(FIN.head,'Part No. (PD)')]?' · '+esc(r[colIdx(FIN.head,'Part No. (PD)')]):'');
+ // ครอบด้วย sticky left:0 + จำกัดความกว้างเท่าจอ เพื่อให้ปุ่มบันทึกอยู่ติดซ้ายเสมอ (ไม่หลุดออกนอกจอเวลาเลื่อนตาราง)
+ return '<tr style="background:#fffbe9"><td colspan="99" style="padding:0">'
+  +'<div style="position:sticky;left:0;width:min(1180px,calc(100vw - 46px));box-sizing:border-box;padding:8px 10px">'
+   +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;position:sticky;top:0">'
+     +'<b style="font-size:11px;color:#b45309">'+ttl+'</b>'
+     +'<button class="btn sm green" onclick="saveFinEdit()">💾 บันทึก</button>'
+     +'<button class="btn sm ghost" onclick="cancelFinEdit()">✖ ยกเลิก</button>'
+   +'</div>'
+   +'<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 4px">'+inputs+'</div>'
+  +'</div></td></tr>';}
 function tab(n){document.querySelectorAll('.screen').forEach((e,i)=>e.classList.toggle('on',i===n));
  document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('active',i===n));if(n===1)render();if(n===2){if(msbcType==='report'||msbcType==='test')msbcType='gliduty';renderMSBC();}}
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
