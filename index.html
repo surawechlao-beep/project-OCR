@@ -189,8 +189,6 @@ async function saveFinEdit(){var i=editFin;if(i<0)return;   // i = _ri (index �
    editFin=-1;ov.style.display='none';render();
    document.getElementById('dbnote').innerHTML='✅ บันทึกแถวต้นทาง (Finance) แล้ว — ทุกหน้าจะอัปเดตตาม (รีเฟรชเพื่อให้คนอื่นเห็น)';
  }catch(e){ov.style.display='none';alert('บันทึกไม่ได้: '+(e.message||e)+'\n(เช็คว่า Apps Script deploy มี updaterow แล้ว)');}}
-// ตัดเวลาออกจากค่าวันที่ (Sheets ส่งกลับมาเป็น 2026-07-18T07:00:00.000Z) -> 2026-07-18
-function dOnly(v){var s=String(v==null?'':v);var m=s.match(/^(\d{4}-\d{2}-\d{2})T/);return m?m[1]:s;}
 function finEditorTR(){var i=editFin,r=FIN_ALL.rows[i];if(!r)return '';
  var inputs=FIN.head.map(function(hn,c){return '<label style="font-size:10px;color:#64748b;display:inline-flex;flex-direction:column;margin:2px 6px 2px 0">'+esc(hn)+'<input id="ef_'+c+'" value="'+esc(dOnly(r[c]))+'" style="width:'+(isNum(hn)?'82':'118')+'px;padding:3px 5px;border:1px solid #cdd8ea;border-radius:5px;font-family:inherit;font-size:11px"></label>';}).join('');
  var ttl='✏️ แก้ไขข้อมูลต้นทาง Finance — HAWB '+esc(r[colIdx(FIN.head,'HAWB')])+(r[colIdx(FIN.head,'Part No. (PD)')]?' · '+esc(r[colIdx(FIN.head,'Part No. (PD)')]):'');
@@ -213,6 +211,27 @@ const isNum=h=>/duty|vat|gross|value|amount|charge|actual|before|unit cost|ต�
 function fmtCell(v){if(typeof v==='number'&&!Number.isInteger(v))return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});return v;}
 function fmt2(v){var n=typeof v==='number'?v:parseFloat(v);if(isNaN(n))return v;return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// ===== ทำวันที่ให้เป็นมาตรฐาน YYYY-MM-DD ตั้งแต่ตอนโหลด =====
+// Google Sheets ส่งช่องวันที่กลับมาเป็น ISO datetime เต็ม (เช่น 2026-08-04T07:00:00.000Z)
+// ถ้าไม่แปลง จะเพี้ยนทั้งการแสดงผล ตัวกรองเดือน export และตอนกดแก้ไข
+var RE_ISODT=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):/;
+function dOnly(v){
+ if(v==null)return '';
+ var s=(typeof v==='string')?v:(v instanceof Date?v.toISOString():String(v));
+ var m=s.match(RE_ISODT); if(!m) return (typeof v==='string')?v:String(v);
+ // เวลาที่ติดมาคือ "เที่ยงคืนของ timezone ชีต" แปลงเป็น UTC แล้วอาจตกวันก่อนหน้า/ถัดไป
+ // กติกา: ถ้าเวลา UTC >= 12:00 ให้ถือเป็นวันถัดไป (ปัดเข้าเที่ยงคืนที่ใกล้ที่สุด)
+ var d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+ if(+m[4]>=12) d.setUTCDate(d.getUTCDate()+1);
+ return d.toISOString().slice(0,10);}
+function normDates(d){
+ ['finance','purchase','freight','jobmaster'].forEach(function(k){
+   var t=d&&d[k]; if(!t||!t.length)return;
+   for(var i=1;i<t.length;i++){var row=t[i]; if(!row||!row.length)continue;
+     for(var c=0;c<row.length;c++){var v=row[c];
+       if(v instanceof Date||(typeof v==='string'&&RE_ISODT.test(v))) row[c]=dOnly(v);}}});
+ return d;}
+
 // ===== ตัวกรองเดือน (global — ใช้ทุกหน้า) =====
 // กรองด้วย "วันที่อัปโหลด" (Upload Date) · ค่าเริ่มต้น = เดือนล่าสุดที่มีข้อมูล · 'ALL' = ทุกเดือน
 var MONTH='', FIN_ALL={head:[],rows:[]}, PUR_ALL={head:[],rows:[]};
@@ -253,7 +272,7 @@ async function loadDB(){
  const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='⬇ ดึงข้อมูลกลางจาก Google Drive...';
  try{
    const r=await fetch(URL_AS+'?action=db',{redirect:'follow'});
-   const d=await r.json();
+   const d=normDates(await r.json());
    if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
    setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
    buildFrtMap(d.freight);INBOX=d.inbox||[];
@@ -264,7 +283,7 @@ async function loadDB(){
  }catch(e){
    ov.style.display='none';
    // สำรอง: ใช้ข้อมูลล่าสุดที่เคยโหลด (cache) ถ้ามี
-   let c=null,ct='';try{c=JSON.parse(localStorage.getItem('osa_cache'));ct=localStorage.getItem('osa_cache_t')||'';}catch(_){}
+   let c=null,ct='';try{c=normDates(JSON.parse(localStorage.getItem('osa_cache')));ct=localStorage.getItem('osa_cache_t')||'';}catch(_){}
    if(c&&c.finance){
      setDB({head:(c.finance[0]||[]),rows:c.finance.slice(1)},{head:(c.purchase[0]||[]),rows:c.purchase.slice(1)});
      buildFrtMap(c.freight);INBOX=c.inbox||[];
