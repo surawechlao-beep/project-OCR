@@ -612,9 +612,9 @@ async function exportXLSX(){const o=curFiltered();if(!o.rows.length){alert('ไ�
 // ===== MSBC Template =====
 var msbcHAWB='ALL',msbcType='gliduty';
 var MSBC_COLS=['Receipt No.','Receipt Line No.','G/L Temp','Type','No.','Part No.','G/L Account Name','Description/Comment','Location Code','Quantity','Unit of Measure Code','Direct Unit Cost','Line Discount %','Line Amount Excl. VAT','VAT Difference','Gen. Prod. Posting Group','VAT Prod. Posting Group','WHT Product Posting Group','Remark','Ref. Cost Sheet No.','Ref. Cost Sheet Line No.','Cost Sheet Remaining','Department Code','Job No. Code','Item no. Code','Item category Code','Cost sheet no. Code','VAT LINE Code','Employee Code','Subtotal Excl. VAT','Inv. Discount Amount','Invoice Discount','Total Excl. VAT','Total VAT','Total Incl. VAT'];
-// แถบ DHL DUTY มีคอลัมน์ "Row No." เพิ่มหน้าสุด · เลขเริ่มนับ 1 ใหม่ทุก HAWB
+// แถบ DHL DUTY + DHL FREIGHT มีคอลัมน์ "Row No." เพิ่มหน้าสุด · เลขเริ่มนับ 1 ใหม่ทุก HAWB
 var MSBC_ROW_COLS=['Row No.'].concat(MSBC_COLS);
-function mCols(){return msbcType==='dhlduty'?MSBC_ROW_COLS:MSBC_COLS;}
+function mCols(){return msbcType.indexOf('dhl')===0?MSBC_ROW_COLS:MSBC_COLS;}
 function r2(n){return Math.round((+n||0)*100)/100;}
 // ===== Report format (ตรงไฟล์จริง 30 คอลัมน์ หัวข้อ Thai+English) =====
 var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','พาร์ทนัมเบอร์ (PD)','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)'];
@@ -668,8 +668,8 @@ function reportRows(){
 }
 function lineToArr(o){var q=o.Qty==null?1:o.Qty,cost=+o.Cost||0;
  return ['','','',o.Type||'',o.No||'',o.PartNo||'',o.GLName||'',o.Desc||'','',q,o.UoM||'',cost,o.Disc==null?'':o.Disc,r2(q*cost),'',o.GenProd||'',o.VATProd||'',o.WHT||'',o.Remark||'',o.RefCS==null?'':o.RefCS,o.RefCSLine==null?'':o.RefCSLine,'',o.Dept||'VP',o.Job||'',o.ItemNo||'',o.ItemCat||'','','','','','','','','',''];}
-// แถบ DHL DUTY เติม Row No. ไว้หน้าสุด (แถบอื่นไม่มี)
-function lineArr(o){var a=lineToArr(o);return msbcType==='dhlduty'?[o.RowNo==null?'':o.RowNo].concat(a):a;}
+// แถบ DHL (duty/freight) เติม Row No. ไว้หน้าสุด (แถบ GLI ไม่มี)
+function lineArr(o){var a=lineToArr(o);return msbcType.indexOf('dhl')===0?[o.RowNo==null?'':o.RowNo].concat(a):a;}
 function isGliHawb(h){var HA=colIdx(FIN.head,'HAWB'),DI=colIdx(FIN.head,'Duty Invoice No.'),di='';for(var i=0;i<(FIN.rows||[]).length;i++){if(String(FIN.rows[i][HA])===String(h)){di=String(FIN.rows[i][DI]||'');break;}}
  // GLI = เลขใบขน PPOV/IVAI · DHL = QECL · (เผื่อ HAWB ไม่ขึ้น S00 เช่น AE3466 ของ Trillium ก็ยังเป็น GLI)
  if(di.indexOf('PPOV')===0||di.indexOf('IVAI')===0)return true; if(di.indexOf('QECL')===0)return false; return String(h).indexOf('S00')===0;}
@@ -705,9 +705,10 @@ function msbcGenOne(hawb){
     L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',GLName:'Z-INSURANCE',Desc:'Z-INSURANCE - '+g.po,Cost:fc((F?F.ins:0)*g.rt),GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    if(F) vatPair(r2((F.vat+F.termVat+F.insVat)/0.07), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
   }else{
+   // DHL FREIGHT: Desc = "FREIGHT CHARGE - {PO}" · UoM = UNIT · WHT = NOWHT · G/L Account Name เว้นว่าง (Type=Item)
    groups.forEach(function(g){
-    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+g.po,Cost:fc((F?F.air:0)*g.rt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});});
-   if(F) vatPair(r2((F.finvVat||0)/0.07), (F.inv||'')+' - DHL EXPRESS INTERNATIONAL (THAILAND) LTD.','SVAT');   // DHL freight: VAT บนใบ freight invoice
+    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',Desc:'FREIGHT CHARGE - '+g.po,Cost:fc((F?F.air:0)*g.rt),UoM:'UNIT',GenProd:'5112002',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});});
+   if(F) vatPair(r2((F.finvVat||0)/0.07), (F.inv||'')+' - DHL EXPRESS INTERNATIONAL (THAILAND) LTD.','GVAT');   // DHL freight: VAT บนใบ freight invoice
   }
  }
  return L;
