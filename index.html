@@ -292,8 +292,11 @@ async function loadDB(){
    if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
    setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
    buildFrtMap(d.freight);INBOX=d.inbox||[];
-   JOBMASTER=d.jobmaster&&d.jobmaster.length?{head:d.jobmaster[0],rows:d.jobmaster.slice(1)}:{head:[],rows:[]};
-   try{localStorage.setItem('osa_cache',JSON.stringify(d));localStorage.setItem('osa_cache_t',new Date().toISOString());}catch(_){}
+   POJOBIDX=d.pojob||null;POJOB=null;   // ⚡ ดัชนีย่อ PO->Job/CS/Dept (แทน Job Master ทั้งก้อน)
+   if(d.jobmaster&&d.jobmaster.length)JOBMASTER={head:d.jobmaster[0],rows:d.jobmaster.slice(1)};   // (เผื่อ Apps Script เวอร์ชันเก่า)
+   // ไม่เก็บ Job Master ลง cache — ก้อนใหญ่ 2 MB ทำให้เบราว์เซอร์อืดและเกินโควตา
+   try{var cc={};for(var k in d)if(k!=='jobmaster')cc[k]=d[k];
+       localStorage.setItem('osa_cache',JSON.stringify(cc));localStorage.setItem('osa_cache_t',new Date().toISOString());}catch(_){}
    ov.style.display='none';renderInbox();render();
    document.getElementById('hb').innerHTML='● ข้อมูลกลาง — โหลดสำเร็จ';
  }catch(e){
@@ -304,7 +307,7 @@ async function loadDB(){
      setDB({head:(c.finance[0]||[]),rows:c.finance.slice(1)},{head:(c.purchase[0]||[]),rows:c.purchase.slice(1)});
      buildFrtMap(c.freight);
      INBOX=null;   // ⚠️ ห้ามใช้รายการ Inbox เก่า — เป็นข้อมูลที่เปลี่ยนตลอด ถ้าโหลดไม่ได้ให้บอกว่า "ไม่ทราบ" ไม่ใช่โชว์ของเก่า
-     JOBMASTER=c.jobmaster&&c.jobmaster.length?{head:c.jobmaster[0],rows:c.jobmaster.slice(1)}:{head:[],rows:[]};
+     POJOBIDX=c.pojob||null;POJOB=null;
      renderInbox();render();
      document.getElementById('hb').innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
      document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+') • <a href="#" onclick="loadDB();return false">ลองโหลดใหม่</a>';
@@ -420,18 +423,31 @@ function render(){
  document.getElementById('tb').innerHTML=h;
  document.getElementById('dbnote').innerHTML=qs?('พบ '+rows.length+' แถว (ค้นทุกคอลัมน์)'):(isFin?('Finance = 1 แถว/รายการ (ราย item) • Part No. (PD) + Job/Cost Sheet จาก ERP จริง • ดึงสดจาก Google Drive (กด ↻ รีเฟรช)'):'Purchase = 1 แถว/รายการสินค้า • ข้อมูลกลาง');
 }
-function setView(v){view=v;var pf=document.getElementById('pf');if(pf)pf.classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');var ps=document.getElementById('ps');if(ps)ps.classList.toggle('on',v==='sum');var pj=document.getElementById('pj');if(pj)pj.classList.toggle('on',v==='jm');var pd2=document.getElementById('pd2');if(pd2)pd2.classList.toggle('on',v==='duty');var prep=document.getElementById('prep');if(prep)prep.classList.toggle('on',v==='report');if(v==='report')msbcType='report';render();}
+function setView(v){view=v;var pf=document.getElementById('pf');if(pf)pf.classList.toggle('on',v==='fin');document.getElementById('pp').classList.toggle('on',v==='pur');var ps=document.getElementById('ps');if(ps)ps.classList.toggle('on',v==='sum');var pj=document.getElementById('pj');if(pj)pj.classList.toggle('on',v==='jm');var pd2=document.getElementById('pd2');if(pd2)pd2.classList.toggle('on',v==='duty');var prep=document.getElementById('prep');if(prep)prep.classList.toggle('on',v==='report');if(v==='report')msbcType='report';if(v==='jm')loadJM();render();}
 function purHawbMatch(h){return purHawbSel===null||purHawbSel.indexOf(String(h))>=0;}
-var POJOB=null,POJOBsig='';
-function poJobCS(po){ // หา Job No. Code + Ref. Cost Sheet No. จาก PO (Finance ก่อน, ไม่พบใช้ Job Master)
- var sig=(FIN.rows?FIN.rows.length:0)+'/'+((JOBMASTER.rows||[]).length);
+var POJOB=null,POJOBsig='',POJOBIDX=null;   // POJOBIDX = ดัชนีย่อจาก Apps Script {PO:[job,cs,dept]}
+function poJobCS(po){ // หา Job No. Code + Ref. Cost Sheet No. จาก PO (Finance ก่อน, ไม่พบใช้ดัชนี PR)
+ var sig=(FIN.rows?FIN.rows.length:0)+'/'+((JOBMASTER.rows||[]).length)+'/'+(POJOBIDX?1:0);
  if(POJOB===null||POJOBsig!==sig){POJOB={};POJOBsig=sig;
    var jH=colIdx(FIN.head,'Job No. Code'),cH=colIdx(FIN.head,'Ref. Cost Sheet No.'),pH=colIdx(FIN.head,'PO');
    if(pH>=0)FIN.rows.forEach(function(r){var p=String(r[pH]||'');if(p&&!POJOB[p]&&(r[jH]||r[cH]))POJOB[p]={job:String(r[jH]||''),cs:String(r[cH]||'')};});
+   if(POJOBIDX){for(var p2 in POJOBIDX){if(!POJOB[p2])POJOB[p2]={job:String(POJOBIDX[p2][0]||''),cs:String(POJOBIDX[p2][1]||'')};}}
    var jm=JOBMASTER.head||[],pi=colIdx(jm,'Ref. Docu No.'),ji=colIdx(jm,'Job No. Code'),ci=colIdx(jm,'Ref. Cost Sheet No.');
    if(pi>=0)(JOBMASTER.rows||[]).forEach(function(r){var p=String(r[pi]||'');if(p&&!POJOB[p])POJOB[p]={job:String(r[ji]||''),cs:String(r[ci]||'')};});
  }
  return POJOB[String(po)]||{job:'',cs:''};}
+// ⚡ โหลดตาราง PR เต็มเฉพาะตอนเปิดหน้า Job Master (ก้อน 2 MB — ไม่ดึงตอนโหลดปกติ)
+var JMLOADING=false;
+async function loadJM(){
+ if(JMLOADING||(JOBMASTER.rows||[]).length)return;
+ JMLOADING=true;
+ var tb=document.getElementById('tb');
+ if(tb)tb.innerHTML='<tbody><tr><td class="empty">⏳ กำลังดึงตาราง PR เต็มจาก Google Drive... (ก้อนใหญ่ ใช้เวลาสักครู่ — ดึงครั้งเดียวต่อการเปิดหน้าเว็บ)</td></tr></tbody>';
+ try{ var d=await asJson(URL_AS+'?action=jm');
+   if(d&&d.jobmaster&&d.jobmaster.length){JOBMASTER={head:d.jobmaster[0],rows:d.jobmaster.slice(1)};POJOB=null;}
+ }catch(e){ if(tb)tb.innerHTML='<tbody><tr><td class="empty">โหลดตาราง PR ไม่ได้<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadJM()">ลองใหม่</button></td></tr></tbody>'; }
+ JMLOADING=false; if(view==='jm')render();
+}
 function purJCtd(r){var jc=poJobCS(r[colIdx(PUR.head,'PO')]);return '<td>'+esc(jc.job)+'</td><td>'+esc(jc.cs)+'</td>';}
 function togglePurHawb(h){h=String(h);var all=[...new Set(PUR.rows.map(function(r){return String(r[colIdx(PUR.head,'HAWB')]);}))].filter(Boolean);
  if(purHawbSel===null)purHawbSel=all.slice();
@@ -518,7 +534,7 @@ function renderJM(){
  document.getElementById('filt').innerHTML='<span class="muted">ข้อมูลอ้างอิงจาก ERP (OSA_Job_Master) — ค้น PO เพื่อดู Job No./Cost Sheet/PD/ต้นทุน</span>';
  var H=JOBMASTER.head||[],R=JOBMASTER.rows||[];
  document.getElementById('stats').innerHTML='<div class="card"><div class="k">PR line (แถว)</div><div class="v">'+R.length+'</div></div>'+'<div class="card"><div class="k">คอลัมน์</div><div class="v">'+H.length+'</div></div>';
- if(!H.length){document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">ยังไม่มีข้อมูล Job Master — ตรวจว่า Apps Script deploy เวอร์ชันใหม่ (เสิร์ฟ jobmaster) แล้ว แล้วกด ↻ รีเฟรช</td></tr></tbody>';document.getElementById('dbnote').innerHTML='';return;}
+ if(!H.length){document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">'+(JMLOADING?'⏳ กำลังดึงตาราง PR เต็มจาก Google Drive...':'ยังไม่มีข้อมูล Job Master — <button class="btn sm" onclick="loadJM()">ดึงตาราง PR</button> (ต้อง deploy Apps Script ที่มี ?action=jm)')+'</td></tr></tbody>';document.getElementById('dbnote').innerHTML='';return;}
  var rows=qs?R.filter(function(r){return r.join(' ').toLowerCase().indexOf(qs)>=0;}):R;
  var preCF=rows;rows=cfApply('jm',rows);
  var h='<thead><tr>'+cfThs('jm',H,preCF,function(i){return isNum(H[i]);})+'</tr></thead><tbody>';
@@ -617,8 +633,8 @@ var MSBC_ROW_COLS=['Row No.'].concat(MSBC_COLS);
 function mCols(){return msbcType.indexOf('dhl')===0?MSBC_ROW_COLS:MSBC_COLS;}
 function r2(n){return Math.round((+n||0)*100)/100;}
 // ===== Report format (ตรงไฟล์จริง 30 คอลัมน์ หัวข้อ Thai+English) =====
-var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','พาร์ทนัมเบอร์ (PD)','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)'];
-var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Part No. (PD)','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','Vat of service','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier'];
+var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','พาร์ทนัมเบอร์ (PD)','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)','วันที่อัปโหลด'];
+var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Part No. (PD)','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','Vat of service','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier','Upload Date'];
 var TEST_EN=REPORT_EN.slice(0,17).concat(['Invoice Supplier']);  // test = ฝั่ง Duty 17 คอลัมน์ + supplier
 function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys||'');
  if(s.indexOf('IVAI')>=0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
@@ -627,7 +643,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(y.indexOf('QECL')===0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
  return '';}
-function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[30]]);});}
+function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[28]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
 function visCols(n){var out=[];for(var i=0;i<n;i++){if(reportColSel===null||reportColSel.indexOf(i)>=0)out.push(i);}return out;}
 function curCols(){return (msbcType==='test')?TEST_EN:(msbcType==='report')?REPORT_EN:mCols();}
@@ -662,7 +678,7 @@ function reportRows(){
   var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'),g(r,'Duty Invoice No.'));
   var out=[h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Part No. (PD)'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
    w, wa, g(r,'Duty Invoice No.'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
-   g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup];
+   g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup, fmtDate(g(r,'Upload Date'))];
   out._fi=ridx[i];return out;
  });
 }
