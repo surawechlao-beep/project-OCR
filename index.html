@@ -156,8 +156,8 @@ var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (nul
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
- var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No');
- fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):''};});}
+ var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No');
+ fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,kd:iKd>=0?(+r[iKd]||0):0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):''};});}
 var view='report',filt='ALL',q='',editIdx=-1,editView='',dutyItem=false,repColOpen=false;
 function startEdit(i){editIdx=i;editView=view;render();}
 function cancelEdit(){editIdx=-1;editView='';render();}
@@ -546,7 +546,7 @@ function renderJM(){
 }
 // ---- สรุป 1 บรรทัด/HAWB (รวมค่าส่ง+อากร+VAT) ----
 var SUM_HEAD=['วันที่อัปโหลด','HAWB','PO','Brand (Shipper) - Info from INV','จำนวน item','วันที่','Duty Invoice No.','Supplier','น้ำหนัก (ใบ HAWB)','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Charge','Clearing Charge','Freight + Clearing','Freight USD','Freight Inv.','ประเทศต้นทาง'];
-function freightTotOf(h){var F=FRTMAP[String(h)];if(F){var t=r2(F.air+F.clear+F.trans+F.ot+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);return t>0?t:'—';}
+function freightTotOf(h){var F=FRTMAP[String(h)];if(F){var t=r2(F.air+F.clear+F.trans+F.ot+(F.kd||0)+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);return t>0?t:'—';}
  var s=0,ci=colIdx(FIN.head,'Freight Actual'),hi=colIdx(FIN.head,'HAWB');
  FIN.rows.forEach(function(r){if(String(r[hi])===String(h))s+=parseFloat(r[ci])||0;});return s>0?r2(s):'—';}
 function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=ci('HAWB');
@@ -633,8 +633,8 @@ var MSBC_ROW_COLS=['Row No.'].concat(MSBC_COLS);
 function mCols(){return msbcType.indexOf('dhl')===0?MSBC_ROW_COLS:MSBC_COLS;}
 function r2(n){return Math.round((+n||0)*100)/100;}
 // ===== Report format (ตรงไฟล์จริง 30 คอลัมน์ หัวข้อ Thai+English) =====
-var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','พาร์ทนัมเบอร์ (PD)','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)','วันที่อัปโหลด'];
-var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Part No. (PD)','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','Vat of service','Custom fee','Overtime','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier','Upload Date'];
+var REPORT_TH=['เลขพัสดุ','เลขใบสั่งซื้อ','เลขโครงการ','พาร์ทนัมเบอร์ (PD)','เลขใบประมาณการต้นทุน','แผนก','เลขที่ใบขนสินค้า','วันที่นำเข้า/ส่งออก','น้ำหนัก ไม่รวมบรรจุภัณฑ์','น้ำหนักเฉลี่ย','เลขที่ใบแจ้งหนี้ภาษีนำเข้า/ส่งออก','จำนวนเงินภาษีนำเข้า/ส่งออก','จำนวนเงินยังไม่รวมภาษีมูลค่าเพิ่ม','จำนวนเงิน ภาษีมูลค่าเพิ่ม','จำนวนเงิน','เลขที่ใบแจ้งหนี้ค่าดำเนินงาน','ค่าขนส่งจากโรงงานถึงสนามบิน','ค่าใช้จ่ายในการดำเนินงาน','ค่าขนส่งจากออฟฟิศถึงลูกค้า','ภาษีมูลค่าเพิ่ม','ค่าธรรมเนียมศุลกากร','ค่าล่วงเวลา','ค่าล่วงเวลา/เคาะประตูศุลกากร','ค่าโกดัง','VAT โกดัง','ค่าประกันภัย','VAT ประกัน','จำนวนเงินรวมค่าขนส่ง','Remark','ผู้ให้บริการ (Supplier)','วันที่อัปโหลด'];
+var REPORT_EN=['HAWB. Number','PO Number','JOB Number','Part No. (PD)','Cost Sheet Number','Department','Declaration of goods Number','Export/Import date','Net Weight','Weighted Average','Duty Invoice Number','Import Export Tax','Exclude VAT','Import Export Duty','Duty Amount','Freight Invoice Number','Freight Charge','Clearing Charge','Transport','Vat of service','Custom fee','Overtime','Knock Door','Terminal Storage Charge','VAT of Terminal Handling','Insurance','VAT of Insurance','Freight Amount','Remark','Invoice Supplier','Upload Date'];
 var TEST_EN=REPORT_EN.slice(0,17).concat(['Invoice Supplier']);  // test = ฝั่ง Duty 17 คอลัมน์ + supplier
 function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys||'');
  if(s.indexOf('IVAI')>=0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
@@ -643,7 +643,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(y.indexOf('QECL')===0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
  return '';}
-function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[28]]);});}
+function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[29]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
 function visCols(n){var out=[];for(var i=0;i<n;i++){if(reportColSel===null||reportColSel.indexOf(i)>=0)out.push(i);}return out;}
 function curCols(){return (msbcType==='test')?TEST_EN:(msbcType==='report')?REPORT_EN:mCols();}
@@ -669,16 +669,16 @@ function reportRows(){
  return rows.map(function(r,i){
   var h=String(g(r,'HAWB')),w=+g(r,'Gross')||0,tw=totW[h]||1,ratio=w/tw,wa=(ratio*100).toFixed(4)+'%';
   var F=FRTMAP[h],isLast=(lastIdx[h]===i),isFirst=(firstIdx[h]===i),a=function(v){return r2(v*ratio);};
-  var frtInv,frtChg,clr,trn,fvat,cust,ot,term,tvat,ins,ivat,amt,pen='',bond='',vreg='';
-  if(F){frtInv=F.inv;frtChg=a(F.air);clr=a(F.clear);trn=a(F.trans);cust=a(F.cust);ot=a(F.ot);term=a(F.term);tvat=a(F.termVat);ins=a(F.ins);ivat=a(F.insVat);
+  var frtInv,frtChg,clr,trn,fvat,cust,ot,kd,term,tvat,ins,ivat,amt,pen='',bond='',vreg='';
+  if(F){frtInv=F.inv;frtChg=a(F.air);clr=a(F.clear);trn=a(F.trans);cust=a(F.cust);ot=a(F.ot);kd=a(F.kd||0);term=a(F.term);tvat=a(F.termVat);ins=a(F.ins);ivat=a(F.insVat);
    fvat=isLast?r2((+F.vat||0)+(+F.finvVat||0)):0;   // Vat of service = VAT ค่าเคลียร์ + VAT บนใบ freight invoice (ถ้ามี)
-   amt=r2(frtChg+clr+trn+(+fvat||0)+cust+ot+term+tvat+ins+ivat);
+   amt=r2(frtChg+clr+trn+(+fvat||0)+cust+ot+kd+term+tvat+ins+ivat);
    pen=(isFirst&&F.pen)?F.pen:'';bond=(isFirst&&F.bond)?F.bond:'';vreg=(isFirst&&F.vreg)?F.vreg:'';
-  }else{frtInv=g(r,'Freight Inv.');frtChg=g(r,'Freight Charge');amt=g(r,'Freight Actual');clr=trn=fvat=cust=ot=term=tvat=ins=ivat='';}
+  }else{frtInv=g(r,'Freight Inv.');frtChg=g(r,'Freight Charge');amt=g(r,'Freight Actual');clr=trn=fvat=cust=ot=kd=term=tvat=ins=ivat='';}
   var sup=supplierOf(F?F.inv:g(r,'Freight Inv.'),g(r,'DHL Duty Inv.'),g(r,'Duty Invoice No.'));
   var out=[h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Part No. (PD)'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
    w, wa, g(r,'Duty Invoice No.'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
-   g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, term, tvat, ins, ivat, amt, '', sup, fmtDate(g(r,'Upload Date'))];
+   g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, kd, term, tvat, ins, ivat, amt, '', sup, fmtDate(g(r,'Upload Date'))];
   out._fi=ridx[i];return out;
  });
 }
@@ -717,7 +717,7 @@ function msbcGenOne(hawb){
     L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+g.po,Cost:fc((F?F.air:0)*g.rt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot+F.term):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
     L.push({HAWB:hawb,Type:'Item',No:'Z-TRANSPORT',GLName:'Z-TRANSPORT',Desc:'Z-TRANSPORT - '+g.po,Cost:fc((F?F.trans:0)*g.rt),GenProd:'5112006',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:30000,Dept:g.dept,Job:g.job,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});
-    L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?F.cust:0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?(F.cust+(F.kd||0)):0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
     L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',GLName:'Z-INSURANCE',Desc:'Z-INSURANCE - '+g.po,Cost:fc((F?F.ins:0)*g.rt),GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    if(F) vatPair(r2((F.vat+F.termVat+F.insVat)/0.07), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
   }else{
@@ -739,7 +739,7 @@ function msbcGen(){
 }
 function msbcCell(v){return v==null?'':(typeof v==='number'?(''+v):v);}
 function fmtMoney(v){if(v===''||v==null)return '';var n=parseFloat(v);return isNaN(n)?v:n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function repMoney(i){return (i>=11&&i<=14)||(i>=16&&i<=26);}  // คอลัมน์จำนวนเงินใน REPORT_EN (PD + ลบ 3 คอลัมน์)
+function repMoney(i){return (i>=11&&i<=14)||(i>=16&&i<=27);}  // คอลัมน์จำนวนเงินใน REPORT_EN (PD + Knock Door)
 function msbcMoneyCol(i){var c=mCols()[i];return c==='Direct Unit Cost'||c==='Line Amount Excl. VAT';}
 function renderMSBC(){
  var _mb2=document.getElementById('mbar2');if(_mb2)_mb2.innerHTML=monthBar();
