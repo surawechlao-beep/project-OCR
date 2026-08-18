@@ -632,6 +632,13 @@ async function exportXLSX(){const o=curFiltered();if(!o.rows.length){alert('ไ�
 
 // ===== MSBC Template =====
 var msbcHAWB='ALL',msbcType='gliduty';
+// เลขใบเสร็จ + ชื่อผู้ขายของค่าโกดัง/ค่าประกัน (GLI สำรองจ่ายแล้วแนบใบเสร็จของเจ้าอื่นมา)
+// กรอกมือไปก่อนตามตัวอย่าง jourl จริง — ถ้าเพิ่มคอลัมน์ Terminal Inv / Insurance Inv ในชีต Freight
+// แอพจะใช้ค่าจากชีตแทนทันที (ชีตมาก่อนเสมอ)
+var MSBC_RCPT={
+ '11114084':{term:'86367417 - WPS-PG CARGO COMPANY LIMITED',
+             ins :'T3-BK-54221247 - MUANG THAI INSURANCE PUBLIC COMPANY LIMITED'}
+};
 var MSBC_COLS=['Receipt No.','Receipt Line No.','G/L Temp','Type','No.','Part No.','G/L Account Name','Description/Comment','Location Code','Quantity','Unit of Measure Code','Direct Unit Cost','Line Discount %','Line Amount Excl. VAT','VAT Difference','Gen. Prod. Posting Group','VAT Prod. Posting Group','WHT Product Posting Group','Remark','Ref. Cost Sheet No.','Ref. Cost Sheet Line No.','Cost Sheet Remaining','Department Code','Job No. Code','Item no. Code','Item category Code','Cost sheet no. Code','VAT LINE Code','Employee Code','Subtotal Excl. VAT','Inv. Discount Amount','Invoice Discount','Total Excl. VAT','Total VAT','Total Incl. VAT'];
 // แถบ DHL DUTY + DHL FREIGHT มีคอลัมน์ "Row No." เพิ่มหน้าสุด · เลขเริ่มนับ 1 ใหม่ทุก HAWB
 var MSBC_ROW_COLS=['Row No.'].concat(MSBC_COLS);
@@ -745,8 +752,9 @@ function msbcGenOne(hawb){
    groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM.ex*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
    groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    if(F){   // คู่ INPUT VAT 3 คู่ แยกตามผู้ขายที่ออกใบกำกับจริง (GLI แค่สำรองจ่ายแล้วแนบใบเสร็จมา)
-    if(TM.ex>0) vatPair(TM.ex, F.termInv||'- (ยังไม่มีเลขใบเสร็จค่าโกดัง)','SVAT');
-    if(IN.ex>0) vatPair(IN.ex, F.insInv||'- (ยังไม่มีเลขใบเสร็จค่าประกัน)','SVAT');
+    var RC=MSBC_RCPT[String(hawb)]||{};   // ชีตมาก่อน -> ตารางกรอกมือ -> ข้อความเตือน
+    if(TM.ex>0) vatPair(TM.ex, F.termInv||RC.term||'- (ยังไม่มีเลขใบเสร็จค่าโกดัง)','SVAT');
+    if(IN.ex>0) vatPair(IN.ex, F.insInv ||RC.ins ||'- (ยังไม่มีเลขใบเสร็จค่าประกัน)','SVAT');
     var gliBase=r2((F.vat||0)/0.07);   // ฐานของ GLI = ช่อง TAXABLE บนใบ = Air+Clearing+Transport
     if(gliBase>0) vatPair(gliBase,(F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
    }
@@ -765,9 +773,11 @@ function msbcGen(){
  var hawbs=(msbcHAWB==='ALL')?[...new Set(FIN.rows.map(function(r){return r[ci('HAWB')];}))].filter(Boolean):[msbcHAWB];
  var wantGli=msbcType.indexOf('gli')===0;   // glifreight2 ก็ขึ้นต้น gli เช่นกัน   // แยกตาม forwarder: GLI = ใบขน PPOV/IVAI · DHL = QECL
  hawbs=hawbs.filter(function(h){return isGliHawb(h)===wantGli;});
- if(msbcType==='glifreight2'){   // แถบนี้เอาเฉพาะ HAWB ที่มีมากกว่า 1 job (นับจากจำนวน PO ที่ไม่ซ้ำ)
-   var iPO=ci('PO');
-   hawbs=hawbs.filter(function(h){var s={},n=0;FIN.rows.forEach(function(r){if(String(r[ci('HAWB')])===String(h)){var k=r[iPO]||'';if(!s[k]){s[k]=1;n++;}}});return n>1;});
+ if(msbcType==='glifreight'||msbcType==='glifreight2'){
+   // แยกกันชัดเจน: HAWB ที่มีหลาย job อยู่แถบ (>1 Job) เท่านั้น · แถบปกติเหลือเฉพาะ job เดียว
+   var iPO=ci('PO'), want2=(msbcType==='glifreight2');
+   var nPO=function(h){var s={},n=0;FIN.rows.forEach(function(r){if(String(r[ci('HAWB')])===String(h)){var k=r[iPO]||'';if(!s[k]){s[k]=1;n++;}}});return n;};
+   hawbs=hawbs.filter(function(h){return (nPO(h)>1)===want2;});
  }
  var L=[];hawbs.forEach(function(h){var g=msbcGenOne(h);g.forEach(function(o,i){o.RowNo=i+1;});L=L.concat(g);});return L;
 }
