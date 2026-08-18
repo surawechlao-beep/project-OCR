@@ -133,6 +133,7 @@ mark{background:#fff3a8}
       &nbsp; ชนิด:
       <span class="pill on" id="mt1" onclick="msbcType='gliduty';reportColSel=null;renderMSBC()">GLI DUTY</span>
       <span class="pill" id="mt2" onclick="msbcType='glifreight';reportColSel=null;renderMSBC()">GLI FREIGHT</span>
+      <span class="pill" id="mt5" onclick="msbcType='glifreight2';reportColSel=null;renderMSBC()">GLI FREIGHT (&gt;1 Job)</span>
       <span class="pill" id="mt3" onclick="msbcType='dhlduty';reportColSel=null;renderMSBC()">DHL DUTY</span>
       <span class="pill" id="mt4" onclick="msbcType='dhlfreight';reportColSel=null;renderMSBC()">DHL FREIGHT</span>
       &nbsp; <input id="mq" placeholder="🔍 ค้นในตาราง" oninput="renderMSBC()" style="padding:5px 9px;border:1px solid #cdd8ea;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
@@ -156,8 +157,8 @@ var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (nul
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
- var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No');
- fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,kd:iKd>=0?(+r[iKd]||0):0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):''};});}
+ var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No'),iTmI=ix('Terminal Inv'),iInI=ix('Insurance Inv');
+ fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,kd:iKd>=0?(+r[iKd]||0):0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):'',termInv:(iTmI>=0&&r[iTmI])?String(r[iTmI]):'',insInv:(iInI>=0&&r[iInI])?String(r[iInI]):''};});}
 var view='report',filt='ALL',q='',editIdx=-1,editView='',dutyItem=false,repColOpen=false;
 function startEdit(i){editIdx=i;editView=view;render();}
 function cancelEdit(){editIdx=-1;editView='';render();}
@@ -323,7 +324,11 @@ async function clearInbox(){
  try{const j=await asJson(URL_AS+'?action=clearinbox');
    if(!j||!j.ok)throw new Error((j&&j.error)||'failed');
    if(b)b.textContent='🗑️ เคลียร์ไฟล์ที่อ่านเข้าฐานข้อมูลแล้ว';
-   alert('ย้ายออกจาก Inbox '+(j.moved?j.moved.length:0)+' ไฟล์'+(j.kept&&j.kept.length?' · เหลือรออ่าน '+j.kept.length+' ไฟล์':''));
+   var nm=(j.moved||[]).length, no=(j.other||[]).length;
+   alert('ย้ายออกจาก Inbox '+(nm+no)+' ไฟล์\n\n'
+     +'• เข้าโฟลเดอร์ HAWB: '+nm+' ไฟล์'
+     +(no?'\n• จับคู่ไม่ได้ → เก็บไว้ที่ {วันที่}/other/ : '+no+' ไฟล์\n  '+j.other.join('\n  ')
+          +'\n\n⚠️ ไฟล์ใน other คือกองที่ต้องมาไล่ดูเอง':''));
    loadDB();
  }catch(e){if(b)b.textContent='🗑️ เคลียร์ไฟล์ที่อ่านเข้าฐานข้อมูลแล้ว';alert('เคลียร์ไม่ได้\n\n'+(e.message||e));}
 }
@@ -693,7 +698,7 @@ function msbcGenOne(hawb){
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var rows=FIN.rows.filter(function(r){return String(r[ci('HAWB')])===String(hawb);});
  if(!rows.length)return [];
- var gli=isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
+ var gli2=(msbcType==='glifreight2'), gli=gli2||isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
  var kind=msbcType.indexOf('freight')>=0?'freight':'duty';
  var F=FRTMAP[hawb], sw=rows.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)||1;
  var d0=rows[0][ci('Department')]||'VP', j0=rows[0][ci('Job No. Code')]||'Z-STOCK';
@@ -712,7 +717,7 @@ function msbcGenOne(hawb){
   var vsum=rows.reduce(function(a,r){return a+(+r[ci('VAT')]||0);},0), base=vsum>0?r2(Math.floor(vsum)*100/7):0;   // ฐาน = floor(ΣVAT)x100/7
   if(base>0) vatPair(base, (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
-  if(gli){
+  if(gli&&!gli2){
    groups.forEach(function(g){
     L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+g.po,Cost:fc((F?F.air:0)*g.rt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot+F.term):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
@@ -720,6 +725,31 @@ function msbcGenOne(hawb){
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?(F.cust+(F.kd||0)):0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
     L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',GLName:'Z-INSURANCE',Desc:'Z-INSURANCE - '+g.po,Cost:fc((F?F.ins:0)*g.rt),GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    if(F) vatPair(r2((F.vat+F.termVat+F.insVat)/0.07), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
+  }else if(gli2){
+   // ===== GLI FREIGHT (>1 Job) — โครงตาม journal จริง =====
+   // ต่างจากแถบ GLI FREIGHT เดิม 3 อย่าง
+   //  1) เรียงตาม "ชนิดบรรทัด" ก่อน แล้วค่อยไล่ PO (ไม่ใช่ไล่ PO แล้วยัด 5 บรรทัด)
+   //  2) ค่าโกดัง (Terminal) แยกออกจากค่าเคลียร์ เป็น 5112001 อีกบรรทัดที่ WHT = NOWHT (ไม่หัก ณ ที่จ่าย)
+   //  3) โกดัง/ประกัน ใช้ยอด "ก่อน VAT" แล้วตั้งคู่ INPUT VAT แยกตามผู้ขายตัวจริง รวมเป็น 3 คู่
+   var exv=function(tot,vat){            // ยอดบนใบ GLI รวม VAT แล้ว -> ถอดออก (ถ้าชีตกรอกช่อง VAT มาแล้วก็ใช้ของจริง)
+     tot=+tot||0; vat=+vat||0;
+     if(vat>0) return {ex:r2(tot-vat),vat:r2(vat)};
+     var ex=r2(tot/1.07); return {ex:ex,vat:r2(tot-ex)};
+   };
+   var TM=exv(F?F.term:0,F?F.termVat:0), IN=exv(F?F.ins:0,F?F.insVat:0);
+   var line=function(o){L.push(o);};
+   groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',Desc:'FREIGHT CHARGE - '+g.po,Cost:fc((F?F.air:0)*g.rt),UoM:'UNIT',GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});});
+   groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
+   groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-TRANSPORT',Desc:'LOCAL TRANSPORT - '+g.po,Cost:fc((F?F.trans:0)*g.rt),UoM:'UNIT',GenProd:'5112006',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:30000,Dept:g.dept,Job:g.job,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});});
+   groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?(F.cust+(F.kd||0)):0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
+   groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM.ex*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
+   groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
+   if(F){   // คู่ INPUT VAT 3 คู่ แยกตามผู้ขายที่ออกใบกำกับจริง (GLI แค่สำรองจ่ายแล้วแนบใบเสร็จมา)
+    if(TM.ex>0) vatPair(TM.ex, F.termInv||'- (ยังไม่มีเลขใบเสร็จค่าโกดัง)','SVAT');
+    if(IN.ex>0) vatPair(IN.ex, F.insInv||'- (ยังไม่มีเลขใบเสร็จค่าประกัน)','SVAT');
+    var gliBase=r2((F.vat||0)/0.07);   // ฐานของ GLI = ช่อง TAXABLE บนใบ = Air+Clearing+Transport
+    if(gliBase>0) vatPair(gliBase,(F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
+   }
   }else{
    // DHL FREIGHT: Desc = "FREIGHT CHARGE - {PO}" · UoM = UNIT · WHT = NOWHT · G/L Account Name เว้นว่าง (Type=Item)
    groups.forEach(function(g){
@@ -733,8 +763,12 @@ function msbcGen(){
  if(!FIN.rows.length)return [];
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var hawbs=(msbcHAWB==='ALL')?[...new Set(FIN.rows.map(function(r){return r[ci('HAWB')];}))].filter(Boolean):[msbcHAWB];
- var wantGli=msbcType.indexOf('gli')===0;   // แยกตาม forwarder: GLI = ใบขน PPOV/IVAI · DHL = QECL
+ var wantGli=msbcType.indexOf('gli')===0;   // glifreight2 ก็ขึ้นต้น gli เช่นกัน   // แยกตาม forwarder: GLI = ใบขน PPOV/IVAI · DHL = QECL
  hawbs=hawbs.filter(function(h){return isGliHawb(h)===wantGli;});
+ if(msbcType==='glifreight2'){   // แถบนี้เอาเฉพาะ HAWB ที่มีมากกว่า 1 job (นับจากจำนวน PO ที่ไม่ซ้ำ)
+   var iPO=ci('PO');
+   hawbs=hawbs.filter(function(h){var s={},n=0;FIN.rows.forEach(function(r){if(String(r[ci('HAWB')])===String(h)){var k=r[iPO]||'';if(!s[k]){s[k]=1;n++;}}});return n>1;});
+ }
  var L=[];hawbs.forEach(function(h){var g=msbcGenOne(h);g.forEach(function(o,i){o.RowNo=i+1;});L=L.concat(g);});return L;
 }
 function msbcCell(v){return v==null?'':(typeof v==='number'?(''+v):v);}
@@ -747,7 +781,7 @@ function renderMSBC(){
  var hawbs=[...new Set((FIN.rows||[]).map(function(r){return r[hi];}))].filter(Boolean);
  var sel=document.getElementById('mh');
  if(sel)sel.innerHTML='<option value="ALL"'+(msbcHAWB==='ALL'?' selected':'')+'>ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(msbcHAWB===h?'selected':'')+'>'+h+'</option>';}).join('');
- [['mt1','gliduty'],['mt2','glifreight'],['mt3','dhlduty'],['mt4','dhlfreight']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
+ [['mt1','gliduty'],['mt2','glifreight'],['mt5','glifreight2'],['mt3','dhlduty'],['mt4','dhlfreight']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
  var mcb=document.getElementById('mcolbtn');
  var _mp=document.getElementById('mcolpanel');if(_mp&&_mp.style.display!=='none')setTimeout(buildColPanel,0);
  if(msbcType==='report'||msbcType==='test'){
@@ -775,7 +809,7 @@ function renderMSBC(){
  var mq=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();if(mq)L=L.filter(function(o){return lineToArr(o).join(' ').toLowerCase().indexOf(mq)>=0;});
  var MC=mCols(), vc=visCols(MC.length);
  var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MC.length+' คอลัมน์');
- var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT'}[msbcType]||msbcType;
+ var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT'}[msbcType]||msbcType;
  document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — จัดกลุ่มต่อ PO · กด 🔧 เลือกคอลัมน์ · 📋 คัดลอก/Excel วางลง Business Central ได้เลย · แถบ: <b>'+lbl+'</b>'+nsel;
  var h='<thead><tr>'+vc.map(function(i){var c=MC[i];return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
  h+=L.map(function(o){var a=lineArr(o);return '<tr>'+vc.map(function(i){var v=a[i];return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(MC[i])?'num':'')+'">'+esc(msbcMoneyCol(i)?fmtMoney(v):msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
