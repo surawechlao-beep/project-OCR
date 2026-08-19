@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19a</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19c</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -705,40 +705,47 @@ function msbcGenOne(hawb){
  var F=FRTMAP[hawb], sw=rows.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)||1;
  var d0=rows[0][ci('Department')]||'VP', j0=rows[0][ci('Job No. Code')]||'Z-STOCK';
  // จัดกลุ่มต่อ PO (เดิมกลุ่มตาม Cost Sheet+Job = ที่เพี้ยน)
- var pg={},poOrder=[]; rows.forEach(function(r){var k=r[ci('PO')]||'';if(!pg[k]){pg[k]=[];poOrder.push(k);}pg[k].push(r);});
- var groups=poOrder.map(function(k){var rs=pg[k],r0=rs[0];return {po:k,cs:r0[ci('Ref. Cost Sheet No.')]||0,job:r0[ci('Job No. Code')]||'Z-STOCK',dept:r0[ci('Department')]||'VP',rt:rs.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)/sw,duty:rs.reduce(function(a,r){return a+(+r[ci('Import Duty')]||0);},0)};});
+ // จัดกลุ่มต่อ "PO + Job + Cost Sheet" — PO เดียวอาจมีหลาย job ต้องแยกบรรทัดให้แต่ละ job รับต้นทุนของตัวเอง
+ var pg={},poOrder=[]; rows.forEach(function(r){
+   var k=(r[ci('PO')]||'')+'\u0001'+(r[ci('Job No. Code')]||'')+'\u0001'+(r[ci('Ref. Cost Sheet No.')]||'');
+   if(!pg[k]){pg[k]=[];poOrder.push(k);} pg[k].push(r);});
+ var groups=poOrder.map(function(k){var rs=pg[k],r0=rs[0];return {po:r0[ci('PO')]||'',cs:r0[ci('Ref. Cost Sheet No.')]||0,job:r0[ci('Job No. Code')]||'Z-STOCK',dept:r0[ci('Department')]||'VP',rt:rs.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)/sw,duty:rs.reduce(function(a,r){return a+(+r[ci('Import Duty')]||0);},0)};});
+ // ยอดค่าโกดัง/ประกันบนใบ IVAI รวม VAT แล้ว -> ถอดออก (ถ้าชีตกรอกช่อง VAT มาก็ใช้ของจริง)
+ var exVat=function(tot,vat){tot=+tot||0;vat=+vat||0;
+   if(vat>0)return {ex:r2(tot-vat),vat:r2(vat)};
+   var ex=r2(tot/1.07);return {ex:ex,vat:r2(tot-ex)};};
  var fc=function(v){return F?r2(v):'';};   // ค่า freight: ว่างถ้ายังไม่มีใบ freight invoice
  var vatPair=function(base,desc,prod){L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:desc,Cost:base,GenProd:'GL',VATProd:prod||'GVAT',WHT:'NOWHT',Dept:d0,Job:j0});L.push({HAWB:hawb,Type:'G/L Account',No:'1160002',GLName:'INPUT VAT',Desc:desc,Qty:-1,Cost:base,GenProd:'GL',VATProd:'NOVAT',WHT:'NOWHT',Dept:d0,Job:j0});};
  if(kind==='duty'){
   groups.forEach(function(g){
    // DHL DUTY: บรรทัดค่าเคลียร์เป็น GVAT + NOWHT → MSBC คิด VAT 7% ให้เอง ไม่ต้องมีคู่ INPUT VAT ของ DHL อีก
    if(!gli)L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?F.clear:0)*g.rt),GenProd:'5112001',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
-   if(gli&&g.duty<=0)return;
+   // template มีบรรทัด Z-IMPORT-TAX ยอด 0 ด้วย จึงไม่ข้ามแม้อากรเป็น 0
    L.push({HAWB:hawb,Type:'Item',No:'Z-IMPORT-TAX',Desc:'Z-IMPORT-TAX - '+g.po,Cost:Math.floor(g.duty),UoM:'UNIT',GenProd:'5112004',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:60000,Dept:g.dept,Job:g.job,ItemNo:'Z-IMPORT-TAX',ItemCat:'Z-OTHERS'});});
   // (ตัดออกตามที่ตกลง) คู่ INPUT VAT ของค่าเคลียร์ DHL — ย้ายไปคิดผ่าน GVAT บนบรรทัด CUSTOM CLEARANCE แทน
   var vsum=rows.reduce(function(a,r){return a+(+r[ci('VAT')]||0);},0), base=vsum>0?r2(Math.floor(vsum)*100/7):0;   // ฐาน = floor(ΣVAT)x100/7
   if(base>0) vatPair(base, (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
   if(gli&&!gli2){
+   // ===== GLI FREIGHT (1 job) — โครงตาม MSBC Template 8 บรรทัด =====
+   // ค่าโกดัง/ประกัน ใช้ยอด "ก่อน VAT" แล้วตั้ง VAT Prod = GVAT บนบรรทัดต้นทุนเลย (MSBC คิด 7% ให้เอง)
+   var TM1=exVat(F?F.term:0,F?F.termVat:0), IN1=exVat(F?F.ins:0,F?F.insVat:0);
    groups.forEach(function(g){
-    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',GLName:'Z-FREIGHT',Desc:'Z-FREIGHT - '+g.po,Cost:fc((F?F.air:0)*g.rt),GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
-    L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot+F.term):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
-    L.push({HAWB:hawb,Type:'Item',No:'Z-TRANSPORT',GLName:'Z-TRANSPORT',Desc:'Z-TRANSPORT - '+g.po,Cost:fc((F?F.trans:0)*g.rt),GenProd:'5112006',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:30000,Dept:g.dept,Job:g.job,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});
+    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',Desc:'FREIGHT CHARGE - '+g.po,Cost:fc((F?F.air:0)*g.rt),UoM:'UNIT',GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'Item',No:'Z-TRANSPORT',Desc:'LOCAL TRANSPORT - '+g.po,Cost:fc((F?F.trans:0)*g.rt),UoM:'UNIT',GenProd:'5112006',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:30000,Dept:g.dept,Job:g.job,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?(F.cust+(F.kd||0)):0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
-    L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',GLName:'Z-INSURANCE',Desc:'Z-INSURANCE - '+g.po,Cost:fc((F?F.ins:0)*g.rt),GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
-   if(F) vatPair(r2((F.vat+F.termVat+F.insVat)/0.07), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM1.ex*g.rt),GenProd:'5112001',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN1.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
+   // ฐาน INPUT VAT = ช่อง TAXABLE บนใบ IVAI = Air + Clearing + Transport (ตรงตาม template)
+   if(F) vatPair(r2(F.air+F.clear+F.ot+F.trans), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
   }else if(gli2){
    // ===== GLI FREIGHT (>1 Job) — โครงตาม journal จริง =====
    // ต่างจากแถบ GLI FREIGHT เดิม 3 อย่าง
    //  1) เรียงตาม "ชนิดบรรทัด" ก่อน แล้วค่อยไล่ PO (ไม่ใช่ไล่ PO แล้วยัด 5 บรรทัด)
    //  2) ค่าโกดัง (Terminal) แยกออกจากค่าเคลียร์ เป็น 5112001 อีกบรรทัดที่ WHT = NOWHT (ไม่หัก ณ ที่จ่าย)
    //  3) โกดัง/ประกัน ใช้ยอด "ก่อน VAT" แล้วตั้งคู่ INPUT VAT แยกตามผู้ขายตัวจริง รวมเป็น 3 คู่
-   var exv=function(tot,vat){            // ยอดบนใบ GLI รวม VAT แล้ว -> ถอดออก (ถ้าชีตกรอกช่อง VAT มาแล้วก็ใช้ของจริง)
-     tot=+tot||0; vat=+vat||0;
-     if(vat>0) return {ex:r2(tot-vat),vat:r2(vat)};
-     var ex=r2(tot/1.07); return {ex:ex,vat:r2(tot-ex)};
-   };
-   var TM=exv(F?F.term:0,F?F.termVat:0), IN=exv(F?F.ins:0,F?F.insVat:0);
+   var TM=exVat(F?F.term:0,F?F.termVat:0), IN=exVat(F?F.ins:0,F?F.insVat:0);
    var line=function(o){L.push(o);};
    groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',Desc:'FREIGHT CHARGE - '+g.po,Cost:fc((F?F.air:0)*g.rt),UoM:'UNIT',GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});});
    groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?(F.clear+F.ot):0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
@@ -769,9 +776,12 @@ function msbcGen(){
  hawbs=hawbs.filter(function(h){return isGliHawb(h)===wantGli;});
  if(msbcType==='glifreight'||msbcType==='glifreight2'){
    // แยกกันชัดเจน: HAWB ที่มีหลาย job อยู่แถบ (>1 Job) เท่านั้น · แถบปกติเหลือเฉพาะ job เดียว
-   var iPO=ci('PO'), want2=(msbcType==='glifreight2');
-   var nPO=function(h){var s={},n=0;FIN.rows.forEach(function(r){if(String(r[ci('HAWB')])===String(h)){var k=r[iPO]||'';if(!s[k]){s[k]=1;n++;}}});return n;};
-   hawbs=hawbs.filter(function(h){return (nPO(h)>1)===want2;});
+   var want2=(msbcType==='glifreight2');
+   // นับ "จำนวนกลุ่ม PO+Job+CostSheet" — HAWB ที่มีหลาย job (ถึงจะ PO เดียว) ก็ถือว่าหลาย job
+   var nGrp=function(h){var s={},n=0;FIN.rows.forEach(function(r){if(String(r[ci('HAWB')])===String(h)){
+     var k=(r[ci('PO')]||'')+'\u0001'+(r[ci('Job No. Code')]||'')+'\u0001'+(r[ci('Ref. Cost Sheet No.')]||'');
+     if(!s[k]){s[k]=1;n++;}}});return n;};
+   hawbs=hawbs.filter(function(h){return (nGrp(h)>1)===want2;});
  }
  var L=[];hawbs.forEach(function(h){var g=msbcGenOne(h);g.forEach(function(o,i){o.RowNo=i+1;});L=L.concat(g);});return L;
 }
