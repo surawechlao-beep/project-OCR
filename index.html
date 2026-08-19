@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-18d</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19a</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -632,13 +632,8 @@ async function exportXLSX(){const o=curFiltered();if(!o.rows.length){alert('ไ�
 
 // ===== MSBC Template =====
 var msbcHAWB='ALL',msbcType='gliduty';
-// เลขใบเสร็จ + ชื่อผู้ขายของค่าโกดัง/ค่าประกัน (GLI สำรองจ่ายแล้วแนบใบเสร็จของเจ้าอื่นมา)
-// กรอกมือไปก่อนตามตัวอย่าง jourl จริง — ถ้าเพิ่มคอลัมน์ Terminal Inv / Insurance Inv ในชีต Freight
-// แอพจะใช้ค่าจากชีตแทนทันที (ชีตมาก่อนเสมอ)
-var MSBC_RCPT={
- '11114084':{term:'86367417 - WPS-PG CARGO COMPANY LIMITED',
-             ins :'T3-BK-54221247 - MUANG THAI INSURANCE PUBLIC COMPANY LIMITED'}
-};
+// เลขใบเสร็จค่าโกดัง/ค่าประกัน อ่านจากชีต Freight คอลัมน์ Terminal Inv / Insurance Inv
+// (GLI สำรองจ่ายแล้วแนบใบเสร็จของเจ้าอื่นมา — ใบเสร็จอยู่ในชุด IVAI ที่แนบมาด้วยกัน)
 var MSBC_COLS=['Receipt No.','Receipt Line No.','G/L Temp','Type','No.','Part No.','G/L Account Name','Description/Comment','Location Code','Quantity','Unit of Measure Code','Direct Unit Cost','Line Discount %','Line Amount Excl. VAT','VAT Difference','Gen. Prod. Posting Group','VAT Prod. Posting Group','WHT Product Posting Group','Remark','Ref. Cost Sheet No.','Ref. Cost Sheet Line No.','Cost Sheet Remaining','Department Code','Job No. Code','Item no. Code','Item category Code','Cost sheet no. Code','VAT LINE Code','Employee Code','Subtotal Excl. VAT','Inv. Discount Amount','Invoice Discount','Total Excl. VAT','Total VAT','Total Incl. VAT'];
 // แถบ DHL DUTY + DHL FREIGHT มีคอลัมน์ "Row No." เพิ่มหน้าสุด · เลขเริ่มนับ 1 ใหม่ทุก HAWB
 var MSBC_ROW_COLS=['Row No.'].concat(MSBC_COLS);
@@ -752,9 +747,8 @@ function msbcGenOne(hawb){
    groups.forEach(function(g){line({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM.ex*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});});
    groups.forEach(function(g){line({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    if(F){   // คู่ INPUT VAT 3 คู่ แยกตามผู้ขายที่ออกใบกำกับจริง (GLI แค่สำรองจ่ายแล้วแนบใบเสร็จมา)
-    var RC=MSBC_RCPT[String(hawb)]||{};   // ชีตมาก่อน -> ตารางกรอกมือ -> ข้อความเตือน
-    if(TM.ex>0) vatPair(TM.ex, F.termInv||RC.term||'- (ยังไม่มีเลขใบเสร็จค่าโกดัง)','GVAT');   // โกดัง = GVAT
-    if(IN.ex>0) vatPair(IN.ex, F.insInv ||RC.ins ||'- (ยังไม่มีเลขใบเสร็จค่าประกัน)','GVAT');   // ประกัน = GVAT
+    if(TM.ex>0) vatPair(TM.ex, F.termInv||'- (ยังไม่ได้กรอก Terminal Inv ในชีต Freight)','GVAT');   // โกดัง = GVAT
+    if(IN.ex>0) vatPair(IN.ex, F.insInv ||'- (ยังไม่ได้กรอก Insurance Inv ในชีต Freight)','GVAT');   // ประกัน = GVAT
     var gliBase=r2((F.vat||0)/0.07);   // ฐานของ GLI = ช่อง TAXABLE บนใบ = Air+Clearing+Transport
     if(gliBase>0) vatPair(gliBase,(F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
    }
