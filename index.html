@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19c</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19d</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -551,7 +551,9 @@ function renderJM(){
 }
 // ---- สรุป 1 บรรทัด/HAWB (รวมค่าส่ง+อากร+VAT) ----
 var SUM_HEAD=['วันที่อัปโหลด','HAWB','PO','Brand (Shipper) - Info from INV','จำนวน item','วันที่','Duty Invoice No.','Supplier','น้ำหนัก (ใบ HAWB)','อากรรวม','Before VAT รวม','VAT รวม','รวมอากร (Duty Amt)','ค่าส่งรวม','Freight Charge','Clearing Charge','Freight + Clearing','Freight USD','Freight Inv.','ประเทศต้นทาง'];
-function freightTotOf(h){var F=FRTMAP[String(h)];if(F){var t=r2(F.air+F.clear+F.trans+F.ot+(F.kd||0)+F.cust+F.term+F.termVat+F.ins+F.insVat+F.vat);return t>0?t:'—';}
+// ช่อง Terminal / Insurance = ยอด "รวม VAT" ตามที่พิมพ์บนใบ IVAI แล้ว → ห้ามบวก Terminal VAT / Insurance VAT ซ้ำ
+// (2 ช่องนั้นเก็บไว้บอก "ส่วนที่เป็น VAT" ของยอดนั้น เพื่อให้ MSBC ถอดฐานได้ตรงถึงสตางค์ ไม่ใช่ยอดเพิ่ม)
+function freightTotOf(h){var F=FRTMAP[String(h)];if(F){var t=r2(F.air+F.clear+F.trans+F.ot+(F.kd||0)+F.cust+F.term+F.ins+F.vat);return t>0?t:'—';}
  var s=0,ci=colIdx(FIN.head,'Freight Actual'),hi=colIdx(FIN.head,'HAWB');
  FIN.rows.forEach(function(r){if(String(r[hi])===String(h))s+=parseFloat(r[ci])||0;});return s>0?r2(s):'—';}
 function sumByHAWB(){var H=FIN.head,ci=function(n){return colIdx(H,n);};var iHA=ci('HAWB');
