@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-19d</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-21a</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -136,6 +136,8 @@ mark{background:#fff3a8}
       <span class="pill" id="mt5" onclick="msbcType='glifreight2';reportColSel=null;renderMSBC()">GLI FREIGHT (&gt;1 Job)</span>
       <span class="pill" id="mt3" onclick="msbcType='dhlduty';reportColSel=null;renderMSBC()">DHL DUTY</span>
       <span class="pill" id="mt4" onclick="msbcType='dhlfreight';reportColSel=null;renderMSBC()">DHL FREIGHT</span>
+      <span class="pill" id="mt6" onclick="msbcType='scsduty';reportColSel=null;renderMSBC()">SANKYU DUTY</span>
+      <span class="pill" id="mt7" onclick="msbcType='scsfreight';reportColSel=null;renderMSBC()">SANKYU FREIGHT</span>
       &nbsp; <input id="mq" placeholder="🔍 ค้นในตาราง" oninput="renderMSBC()" style="padding:5px 9px;border:1px solid #cdd8ea;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
     </div>
     <button class="btn" id="mcolbtn" onclick="toggleColPanel()" style="display:none">🔧 เลือกคอลัมน์</button>
@@ -651,6 +653,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(String(dhlDutyInv||'').charAt(0)==='D')return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('QECL')===0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
+ if(y.indexOf('DLSO')===0)return 'SANKYU (THAILAND) CO., LTD.';   // ซังกิว — เดิมช่องนี้ว่าง
  return '';}
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[29]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
@@ -695,14 +698,24 @@ function lineToArr(o){var q=o.Qty==null?1:o.Qty,cost=+o.Cost||0;
  return ['','','',o.Type||'',o.No||'',o.PartNo||'',o.GLName||'',o.Desc||'','',q,o.UoM||'',cost,o.Disc==null?'':o.Disc,r2(q*cost),'',o.GenProd||'',o.VATProd||'',o.WHT||'',o.Remark||'',o.RefCS==null?'':o.RefCS,o.RefCSLine==null?'':o.RefCSLine,'',o.Dept||'VP',o.Job||'',o.ItemNo||'',o.ItemCat||'','','','','','','','','',''];}
 // ทุกแถบ MSBC (DHL + GLI) เติม Row No. ไว้หน้าสุด — นับ 1 ใหม่ทุก HAWB
 function lineArr(o){return [o.RowNo==null?'':o.RowNo].concat(lineToArr(o));}
-function isGliHawb(h){var HA=colIdx(FIN.head,'HAWB'),DI=colIdx(FIN.head,'Duty Invoice No.'),di='';for(var i=0;i<(FIN.rows||[]).length;i++){if(String(FIN.rows[i][HA])===String(h)){di=String(FIN.rows[i][DI]||'');break;}}
+function dutyInvOf(h){var HA=colIdx(FIN.head,'HAWB'),DI=colIdx(FIN.head,'Duty Invoice No.');
+ for(var i=0;i<(FIN.rows||[]).length;i++){if(String(FIN.rows[i][HA])===String(h))return String(FIN.rows[i][DI]||'');}
+ return '';}
+// ⭐ ซังกิว (SANKYU) = เลขใบกำกับขึ้นต้น DLSO · HAWB ขึ้นต้น SCS/DLSO
+//    เดิมตกไปฝั่ง DHL เพราะไม่รู้จัก DLSO — แยกออกมาเป็นแถบของตัวเองแล้ว
+function isScsHawb(h){var di=dutyInvOf(h);
+ return di.indexOf('DLSO')===0||String(h).indexOf('SCS')===0||String(h).indexOf('DLSO')===0;}
+function isGliHawb(h){var di=dutyInvOf(h);
  // GLI = เลขใบขน PPOV/IVAI · DHL = QECL · (เผื่อ HAWB ไม่ขึ้น S00 เช่น AE3466 ของ Trillium ก็ยังเป็น GLI)
+ if(isScsHawb(h))return false;
  if(di.indexOf('PPOV')===0||di.indexOf('IVAI')===0)return true; if(di.indexOf('QECL')===0)return false; return String(h).indexOf('S00')===0;}
 function msbcGenOne(hawb){
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var rows=FIN.rows.filter(function(r){return String(r[ci('HAWB')])===String(hawb);});
  if(!rows.length)return [];
- var gli2=(msbcType==='glifreight2'), gli=gli2||isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
+ // ⭐ ซังกิว: ใช้โครงบรรทัดชุดเดียวกับ GLI ไปก่อน (ยังไม่มี journal ตัวอย่างของซังกิวมาเทียบ)
+ var scs=(msbcType==='scsduty'||msbcType==='scsfreight');
+ var gli2=(msbcType==='glifreight2'), gli=gli2||scs||isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
  var kind=msbcType.indexOf('freight')>=0?'freight':'duty';
  var F=FRTMAP[hawb], sw=rows.reduce(function(a,r){return a+(+r[ci('Gross')]||0);},0)||1;
  var d0=rows[0][ci('Department')]||'VP', j0=rows[0][ci('Job No. Code')]||'Z-STOCK';
@@ -726,7 +739,9 @@ function msbcGenOne(hawb){
    L.push({HAWB:hawb,Type:'Item',No:'Z-IMPORT-TAX',Desc:'Z-IMPORT-TAX - '+g.po,Cost:Math.floor(g.duty),UoM:'UNIT',GenProd:'5112004',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:60000,Dept:g.dept,Job:g.job,ItemNo:'Z-IMPORT-TAX',ItemCat:'Z-OTHERS'});});
   // (ตัดออกตามที่ตกลง) คู่ INPUT VAT ของค่าเคลียร์ DHL — ย้ายไปคิดผ่าน GVAT บนบรรทัด CUSTOM CLEARANCE แทน
   var vsum=rows.reduce(function(a,r){return a+(+r[ci('VAT')]||0);},0), base=vsum>0?r2(Math.floor(vsum)*100/7):0;   // ฐาน = floor(ΣVAT)x100/7
-  if(base>0) vatPair(base, (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
+  // ซังกิว: ใช้เลขใบกำกับ DLSO + ชื่อผู้ให้บริการซังกิว (ยังไม่ยืนยันกับ journal ตัวอย่าง)
+  if(base>0) vatPair(base, scs?(sys+' - SANKYU (THAILAND) CO., LTD.')
+    : (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
   if(gli&&!gli2){
    // ===== GLI FREIGHT (1 job) — โครงตาม MSBC Template 8 บรรทัด =====
@@ -740,7 +755,7 @@ function msbcGenOne(hawb){
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM1.ex*g.rt),GenProd:'5112001',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
     L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN1.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    // ฐาน INPUT VAT = ช่อง TAXABLE บนใบ IVAI = Air + Clearing + Transport (ตรงตาม template)
-   if(F) vatPair(r2(F.air+F.clear+F.ot+F.trans), (F.inv||'')+' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED','SVAT');
+   if(F) vatPair(r2(F.air+F.clear+F.ot+F.trans), (F.inv||'')+(scs?' - SANKYU (THAILAND) CO., LTD.':' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED'),'SVAT');
   }else if(gli2){
    // ===== GLI FREIGHT (>1 Job) — โครงตาม journal จริง =====
    // ต่างจากแถบ GLI FREIGHT เดิม 3 อย่าง
@@ -774,8 +789,10 @@ function msbcGen(){
  if(!FIN.rows.length)return [];
  var H=FIN.head,ci=function(n){return colIdx(H,n);};
  var hawbs=(msbcHAWB==='ALL')?[...new Set(FIN.rows.map(function(r){return r[ci('HAWB')];}))].filter(Boolean):[msbcHAWB];
- var wantGli=msbcType.indexOf('gli')===0;   // glifreight2 ก็ขึ้นต้น gli เช่นกัน   // แยกตาม forwarder: GLI = ใบขน PPOV/IVAI · DHL = QECL
- hawbs=hawbs.filter(function(h){return isGliHawb(h)===wantGli;});
+ // แยกตาม forwarder 3 ฝั่ง: GLI (PPOV/IVAI) · DHL (QECL) · ซังกิว (DLSO)
+ if(msbcType.indexOf('scs')===0){ hawbs=hawbs.filter(isScsHawb); }
+ else{ var wantGli=msbcType.indexOf('gli')===0;   // glifreight2 ก็ขึ้นต้น gli เช่นกัน
+   hawbs=hawbs.filter(function(h){return !isScsHawb(h)&&isGliHawb(h)===wantGli;}); }
  if(msbcType==='glifreight'||msbcType==='glifreight2'){
    // แยกกันชัดเจน: HAWB ที่มีหลาย job อยู่แถบ (>1 Job) เท่านั้น · แถบปกติเหลือเฉพาะ job เดียว
    var want2=(msbcType==='glifreight2');
@@ -797,7 +814,7 @@ function renderMSBC(){
  var hawbs=[...new Set((FIN.rows||[]).map(function(r){return r[hi];}))].filter(Boolean);
  var sel=document.getElementById('mh');
  if(sel)sel.innerHTML='<option value="ALL"'+(msbcHAWB==='ALL'?' selected':'')+'>ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(msbcHAWB===h?'selected':'')+'>'+h+'</option>';}).join('');
- [['mt1','gliduty'],['mt2','glifreight'],['mt5','glifreight2'],['mt3','dhlduty'],['mt4','dhlfreight']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
+ [['mt1','gliduty'],['mt2','glifreight'],['mt5','glifreight2'],['mt3','dhlduty'],['mt4','dhlfreight'],['mt6','scsduty'],['mt7','scsfreight']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
  var mcb=document.getElementById('mcolbtn');
  var _mp=document.getElementById('mcolpanel');if(_mp&&_mp.style.display!=='none')setTimeout(buildColPanel,0);
  if(msbcType==='report'||msbcType==='test'){
@@ -825,7 +842,7 @@ function renderMSBC(){
  var mq=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();if(mq)L=L.filter(function(o){return lineToArr(o).join(' ').toLowerCase().indexOf(mq)>=0;});
  var MC=mCols(), vc=visCols(MC.length);
  var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MC.length+' คอลัมน์');
- var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT'}[msbcType]||msbcType;
+ var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT',scsduty:'SANKYU DUTY',scsfreight:'SANKYU FREIGHT'}[msbcType]||msbcType;
  document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — จัดกลุ่มต่อ PO · กด 🔧 เลือกคอลัมน์ · 📋 คัดลอก/Excel วางลง Business Central ได้เลย · แถบ: <b>'+lbl+'</b>'+nsel;
  var h='<thead><tr>'+vc.map(function(i){var c=MC[i];return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
  h+=L.map(function(o){var a=lineArr(o);return '<tr>'+vc.map(function(i){var v=a[i];return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(MC[i])?'num':'')+'">'+esc(msbcMoneyCol(i)?fmtMoney(v):msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
