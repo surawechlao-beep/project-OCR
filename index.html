@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-21a</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-27a</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -653,7 +653,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(String(dhlDutyInv||'').charAt(0)==='D')return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('QECL')===0)return 'DHL EXPRESS INTERNATIONAL (THAILAND) LTD.';
  if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
- if(y.indexOf('DLSO')===0)return 'SANKYU (THAILAND) CO., LTD.';   // ซังกิว — เดิมช่องนี้ว่าง
+ if(y.indexOf('DLSO')===0)return 'SANKYU THAI COMPANY LIMITED';   // ซังกิว — เดิมช่องนี้ว่าง
  return '';}
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[29]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
@@ -740,7 +740,7 @@ function msbcGenOne(hawb){
   // (ตัดออกตามที่ตกลง) คู่ INPUT VAT ของค่าเคลียร์ DHL — ย้ายไปคิดผ่าน GVAT บนบรรทัด CUSTOM CLEARANCE แทน
   var vsum=rows.reduce(function(a,r){return a+(+r[ci('VAT')]||0);},0), base=vsum>0?r2(Math.floor(vsum)*100/7):0;   // ฐาน = floor(ΣVAT)x100/7
   // ซังกิว: ใช้เลขใบกำกับ DLSO + ชื่อผู้ให้บริการซังกิว (ยังไม่ยืนยันกับ journal ตัวอย่าง)
-  if(base>0) vatPair(base, scs?(sys+' - SANKYU (THAILAND) CO., LTD.')
+  if(base>0) vatPair(base, scs?(sys+' - SANKYU THAI COMPANY LIMITED')
     : (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
   if(gli&&!gli2){
@@ -755,7 +755,7 @@ function msbcGenOne(hawb){
     L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TM1.ex*g.rt),GenProd:'5112001',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
     L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IN1.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
    // ฐาน INPUT VAT = ช่อง TAXABLE บนใบ IVAI = Air + Clearing + Transport (ตรงตาม template)
-   if(F) vatPair(r2(F.air+F.clear+F.ot+F.trans), (F.inv||'')+(scs?' - SANKYU (THAILAND) CO., LTD.':' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED'),'SVAT');
+   if(F) vatPair(r2(F.air+F.clear+F.ot+F.trans), (F.inv||'')+(scs?' - SANKYU THAI COMPANY LIMITED':' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED'),'SVAT');
   }else if(gli2){
    // ===== GLI FREIGHT (>1 Job) — โครงตาม journal จริง =====
    // ต่างจากแถบ GLI FREIGHT เดิม 3 อย่าง
@@ -804,6 +804,14 @@ function msbcGen(){
  }
  var L=[];hawbs.forEach(function(h){var g=msbcGenOne(h);g.forEach(function(o,i){o.RowNo=i+1;});L=L.concat(g);});return L;
 }
+// ⭐ ช่องค้นหาแถบ MSBC — ต่อเลข HAWB เข้าไปในข้อความที่ใช้ค้นด้วย
+//    (บรรทัด journal มีแค่ PO / Job / G-L / Description ไม่มีเลขใบขนอยู่ในตัวมัน พิมพ์เลขใบขนจึงไม่เคยเจอ)
+//    ใช้ตัวเดียวกันทั้งตอนแสดงผล · คัดลอก · ออก Excel — เห็นอะไรได้อันนั้น
+function msbcFilterQ(L){
+ var q=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();
+ if(!q)return L;
+ return L.filter(function(o){return ((o.HAWB||'')+' '+lineToArr(o).join(' ')).toLowerCase().indexOf(q)>=0;});
+}
 function msbcCell(v){return v==null?'':(typeof v==='number'?(''+v):v);}
 function fmtMoney(v){if(v===''||v==null)return '';var n=parseFloat(v);return isNaN(n)?v:n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function repMoney(i){return (i>=11&&i<=14)||(i>=16&&i<=27);}  // คอลัมน์จำนวนเงินใน REPORT_EN (PD + Knock Door)
@@ -839,7 +847,7 @@ function renderMSBC(){
  if(mcb)mcb.style.display='';
  document.getElementById('mtb').className='';
  var L=msbcGen();
- var mq=((document.getElementById('mq')||{}).value||'').trim().toLowerCase();if(mq)L=L.filter(function(o){return lineToArr(o).join(' ').toLowerCase().indexOf(mq)>=0;});
+ L=msbcFilterQ(L);
  var MC=mCols(), vc=visCols(MC.length);
  var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MC.length+' คอลัมน์');
  var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlfreight:'DHL FREIGHT',scsduty:'SANKYU DUTY',scsfreight:'SANKYU FREIGHT'}[msbcType]||msbcType;
@@ -857,7 +865,7 @@ function copyMSBC(){
    txt=[vc.map(function(i){return REPORT_TH[i];}).join('\t'),vc.map(function(i){return REPORT_EN[i];}).join('\t')].concat(R.map(pk)).join('\n');
  }else if(msbcType==='test'){var T=testRows();if(!T.length){alert('ไม่มีข้อมูล');return;}var vt=visCols(TEST_EN.length);
    txt=[vt.map(function(i){return TEST_EN[i];}).join('\t')].concat(T.map(function(a){return vt.map(function(i){var v=a[i];return v==null?'':v;}).join('\t');})).join('\n');
- }else{var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูล');return;}var MC=mCols(),vc=visCols(MC.length);
+ }else{var L=msbcFilterQ(msbcGen());if(!L.length){alert('ไม่มีข้อมูล');return;}var MC=mCols(),vc=visCols(MC.length);
    txt=[vc.map(function(i){return MC[i];}).join('\t')].concat(L.map(function(o){var a=lineArr(o);return vc.map(function(i){var v=a[i];if(v===''||v==null)return '';return msbcMoneyCol(i)?(parseFloat(v)||0).toFixed(2):v;}).join('\t');})).join('\n');
  }
  var done=function(){var b=document.getElementById('mcopy');if(b){var t=b.innerHTML;b.innerHTML='✓ คัดลอกแล้ว';setTimeout(function(){b.innerHTML=t;},1500);}};
@@ -887,7 +895,7 @@ async function exportMSBC(){
    var bt=await wb.xlsx.writeBuffer(),bb=new Blob([bt],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
    var at=document.createElement('a');at.href=window.URL.createObjectURL(bb);at.download='test_'+msbcHAWB+'.xlsx';at.click();return;
  }
- var L=msbcGen();if(!L.length){alert('ไม่มีข้อมูลสำหรับสร้าง');return;}var MC=mCols(),vc=visCols(MC.length);
+ var L=msbcFilterQ(msbcGen());if(!L.length){alert('ไม่มีข้อมูลสำหรับสร้าง');return;}var MC=mCols(),vc=visCols(MC.length);
  var ws2=wb.addWorksheet('MSBC');
  ws2.columns=vc.map(function(i){return {header:MC[i],width:Math.min(30,Math.max(10,MC[i].length+2))};});
  ws2.getRow(1).eachCell(function(c){c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:9};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
