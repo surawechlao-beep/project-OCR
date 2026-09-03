@@ -76,7 +76,7 @@ mark{background:#fff3a8}
 <div class="app">
 <header>
   <div class="logo">OS</div>
-  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-08-27a</span></h1>
+  <div><h1>OSA Import — ระบบนำเข้าข้อมูลใบขน <span style="font-size:12px;font-weight:600;color:#fff;background:#0f766e;padding:3px 9px;border-radius:20px;vertical-align:middle;letter-spacing:.3px">v2026-09-03a</span></h1>
   <div class="sub">ข้อมูลกลางจาก Google Drive — ทุกคนเปิดเห็นชุดเดียวกัน</div></div>
   <div class="badge" id="hb">● ข้อมูลกลาง</div>
 </header>
@@ -84,6 +84,7 @@ mark{background:#fff3a8}
   <div class="tab active" data-t="0" onclick="tab(0)">📥 นำเข้าเอกสาร</div>
   <div class="tab" data-t="1" onclick="tab(1)">🗄️ ฐานข้อมูล (กลาง)</div>
   <div class="tab" data-t="2" onclick="tab(2)">🧾 MSBC Template</div>
+  <div class="tab" data-t="3" onclick="tab(3)">🚚 Local transport</div>
 </div>
 <div class="wrap">
 
@@ -150,10 +151,26 @@ mark{background:#fff3a8}
   <div class="note info" style="margin-top:12px" id="mnote"></div>
 </div>
 
+<!-- ===== 🚚 Local transport — ค่าขนส่งในประเทศ ===== -->
+<div class="screen" id="t3">
+  <div class="flex-between">
+    <h2 class="title">🚚 Local transport — ค่าขนส่งในประเทศ</h2>
+    <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+  </div>
+  <p class="muted">ใบเสนอราคาขนส่ง 1 ใบแตกเป็นหลายบรรทัดตาม Cost Sheet → ตั้งงบไว้ล่วงหน้า แล้วดูว่าแต่ละ Cost Sheet เหลือเท่าไหร่หลังหักค่าส่งจริง</p>
+  <div style="margin:10px 0 14px">
+    <span class="pill active" id="tp0" onclick="trnGo(0)">📊 มอนิเตอร์</span>
+    <span class="pill" id="tp1" onclick="trnGo(1)">📋 Raw data</span>
+    <span class="pill" id="tp2" onclick="trnGo(2)">🧾 MSBC Template</span>
+  </div>
+  <div id="trnbody"></div>
+</div>
+
 </div></div>
 <script>
 const URL_AS='https://script.google.com/macros/s/AKfycbx_TepASsChABfUlMUl3yrsRdaFugAGtN96l7ty9XuTj3oTXnAIMLOgmo68UulDlXlWYw/exec';
 var FIN={head:[],rows:[]},PUR={head:[],rows:[]},INBOX=[],FRTMAP={},JOBMASTER={head:[],rows:[]};
+var TRN={head:[],rows:[]},BUD={head:[],rows:[]};   // 🚚 ค่าขนส่งในประเทศ + งบราย Cost Sheet
 var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (null=ทั้งหมด)
 // โฟลเดอร์เอกสารบน Drive
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
@@ -206,7 +223,8 @@ function finEditorTR(){var i=editFin,r=FIN_ALL.rows[i];if(!r)return '';
    +'<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:2px 4px">'+inputs+'</div>'
   +'</div></td></tr>';}
 function tab(n){document.querySelectorAll('.screen').forEach((e,i)=>e.classList.toggle('on',i===n));
- document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('active',i===n));if(n===1)render();if(n===2){if(msbcType==='report'||msbcType==='test')msbcType='gliduty';reportColSel=null;renderMSBC();}}
+ document.querySelectorAll('.tab').forEach((e,i)=>e.classList.toggle('active',i===n));if(n===1)render();if(n===2){if(msbcType==='report'||msbcType==='test')msbcType='gliduty';reportColSel=null;renderMSBC();}
+ if(n===3)renderTRN();}
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 function hl(t,qs){t=String(t==null?'':t);if(!qs)return esc(t);const i=t.toLowerCase().indexOf(qs);if(i<0)return esc(t);return esc(t.slice(0,i))+'<mark>'+esc(t.slice(i,i+qs.length))+'</mark>'+esc(t.slice(i+qs.length));}
 function focusQ(){const el=document.getElementById('q');if(el){const v=el.value;el.focus();el.setSelectionRange(v.length,v.length);}}
@@ -228,7 +246,7 @@ function dOnly(v){
  if(+m[4]>=12) d.setUTCDate(d.getUTCDate()+1);
  return d.toISOString().slice(0,10);}
 function normDates(d){
- ['finance','purchase','freight','jobmaster'].forEach(function(k){
+ ['finance','purchase','freight','transport','budget','jobmaster'].forEach(function(k){
    var t=d&&d[k]; if(!t||!t.length)return;
    for(var i=1;i<t.length;i++){var row=t[i]; if(!row||!row.length)continue;
      for(var c=0;c<row.length;c++){var v=row[c];
@@ -294,7 +312,7 @@ async function loadDB(){
    const d=normDates(await asJson(URL_AS+'?action=db'));
    if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
    setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
-   buildFrtMap(d.freight);INBOX=d.inbox||[];
+   buildFrtMap(d.freight);INBOX=d.inbox||[];setTRN(d);
    POJOBIDX=d.pojob||null;POJOB=null;   // ⚡ ดัชนีย่อ PO->Job/CS/Dept (แทน Job Master ทั้งก้อน)
    if(d.jobmaster&&d.jobmaster.length)JOBMASTER={head:d.jobmaster[0],rows:d.jobmaster.slice(1)};   // (เผื่อ Apps Script เวอร์ชันเก่า)
    // ไม่เก็บ Job Master ลง cache — ก้อนใหญ่ 2 MB ทำให้เบราว์เซอร์อืดและเกินโควตา
@@ -308,7 +326,7 @@ async function loadDB(){
    let c=null,ct='';try{c=normDates(JSON.parse(localStorage.getItem('osa_cache')));ct=localStorage.getItem('osa_cache_t')||'';}catch(_){}
    if(c&&c.finance){
      setDB({head:(c.finance[0]||[]),rows:c.finance.slice(1)},{head:(c.purchase[0]||[]),rows:c.purchase.slice(1)});
-     buildFrtMap(c.freight);
+     buildFrtMap(c.freight);setTRN(c);
      INBOX=null;   // ⚠️ ห้ามใช้รายการ Inbox เก่า — เป็นข้อมูลที่เปลี่ยนตลอด ถ้าโหลดไม่ได้ให้บอกว่า "ไม่ทราบ" ไม่ใช่โชว์ของเก่า
      POJOBIDX=c.pojob||null;POJOB=null;
      renderInbox();render();
@@ -913,5 +931,240 @@ window.addEventListener('DOMContentLoaded',()=>{
  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.background='';handleFiles([...e.dataTransfer.files]);});
  loadDB();
 });
+
+// ============================================================================
+//  🚚 Local transport — ค่าขนส่งในประเทศ (เพิ่ม 3 ก.ย. 2569)
+// ============================================================================
+//  แนวคิด: ใบเสนอราคาขนส่ง 1 ใบ มัก "สแลช" อ้างอิงหลายบรรทัด = หลาย Cost Sheet
+//          เช่น  POPI260086 / VP260424 / CSP260510 / VP / 1000 / PTT GC (I-1)
+//          จึงเก็บเป็น 1 แถว = 1 บรรทัดอ้างอิง แล้วรวมยอดตาม Cost Sheet
+//  งบประมาณ (Budget) ผู้ใช้กรอกเองราย Cost Sheet -> คงเหลือ = Budget - ใช้จริง
+var TRN_HEAD=['Delivery Date','Vendor','Quotation No.','Quotation Date','PO','Job No. Code',
+ 'Ref. Cost Sheet No.','Department','Pickup Location','Delivery Location','Vehicle',
+ 'Amount','VAT','Total','Ref Line','Remark','Upload Date','Reviewed'];
+var BUD_HEAD=['Ref. Cost Sheet No.','Job No. Code','Department','Budget','Note','Updated'];
+var TRN_TH={'Delivery Date':'วันที่ส่งจริง','Vendor':'บริษัทขนส่ง','Quotation No.':'เลขใบเสนอราคา',
+ 'Quotation Date':'วันที่ใบเสนอราคา','PO':'PO','Job No. Code':'Job','Ref. Cost Sheet No.':'Cost Sheet',
+ 'Department':'แผนก','Pickup Location':'สถานที่รับ','Delivery Location':'สถานที่ส่ง','Vehicle':'ประเภทรถ',
+ 'Amount':'ราคา','VAT':'VAT','Total':'รวม','Ref Line':'บรรทัดอ้างอิง','Remark':'หมายเหตุ',
+ 'Upload Date':'วันที่ลง','Reviewed':'ตรวจแล้ว'};
+var trnPage=0, trnQ='';
+function trnH(){return TRN.head&&TRN.head.length?TRN.head:TRN_HEAD;}
+function budH(){return BUD.head&&BUD.head.length?BUD.head:BUD_HEAD;}
+function ti(n){return colIdx(trnH(),n);}
+function bi(n){return colIdx(budH(),n);}
+function setTRN(d){
+ if(d&&d.transport&&d.transport.length){TRN={head:d.transport[0],rows:d.transport.slice(1)};}
+ else TRN={head:TRN_HEAD.slice(),rows:[]};
+ if(d&&d.budget&&d.budget.length){BUD={head:d.budget[0],rows:d.budget.slice(1)};}
+ else BUD={head:BUD_HEAD.slice(),rows:[]};
+ TRN.rows.forEach(function(r,i){r._ri=i;});BUD.rows.forEach(function(r,i){r._ri=i;});}
+function n2(v){var n=parseFloat(String(v==null?'':v).replace(/,/g,''));return isNaN(n)?0:n;}
+// ---- รวมยอดตาม Cost Sheet ----
+function trnByCS(){
+ var c=ti('Ref. Cost Sheet No.'),a=ti('Amount'),j=ti('Job No. Code'),dp=ti('Department');
+ var m={};
+ TRN.rows.forEach(function(r){var k=String(r[c]||'').trim();if(!k)return;
+  if(!m[k])m[k]={cs:k,used:0,n:0,job:'',dept:''};
+  m[k].used+=n2(r[a]);m[k].n++;
+  if(!m[k].job&&r[j])m[k].job=r[j];
+  if(!m[k].dept&&r[dp])m[k].dept=r[dp];});
+ return m;}
+function budMap(){
+ var c=bi('Ref. Cost Sheet No.'),b=bi('Budget'),j=bi('Job No. Code'),dp=bi('Department'),nt=bi('Note');
+ var m={};BUD.rows.forEach(function(r){var k=String(r[c]||'').trim();if(!k)return;
+  m[k]={budget:n2(r[b]),job:r[j]||'',dept:r[dp]||'',note:r[nt]||'',_ri:r._ri};});
+ return m;}
+function csRows(){                    // รวมทุก Cost Sheet ที่มีงบ หรือมีค่าใช้จ่าย
+ var u=trnByCS(),b=budMap(),keys={};
+ Object.keys(u).forEach(function(k){keys[k]=1;});Object.keys(b).forEach(function(k){keys[k]=1;});
+ return Object.keys(keys).sort().map(function(k){
+  var used=u[k]?u[k].used:0, bg=b[k]?b[k].budget:null;
+  return {cs:k,job:(b[k]&&b[k].job)||(u[k]&&u[k].job)||'',dept:(b[k]&&b[k].dept)||(u[k]&&u[k].dept)||'',
+   budget:bg,used:used,remain:(bg==null?null:r2(bg-used)),n:u[k]?u[k].n:0,note:(b[k]&&b[k].note)||''};});}
+function remainOf(cs){var b=budMap()[cs];if(!b)return null;var u=trnByCS()[cs];return r2(b.budget-(u?u.used:0));}
+function trnGo(n){trnPage=n;[0,1,2].forEach(function(i){var e=document.getElementById('tp'+i);if(e)e.classList.toggle('active',i===n);});renderTRN();}
+function trnCard(k,v){return '<div class="card"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>';}
+// ============================ หน้าที่ 1 — มอนิเตอร์ ============================
+function renderTRNmon(){
+ var R=csRows();
+ var q=trnQ.trim().toLowerCase();
+ if(q)R=R.filter(function(x){return (x.cs+' '+x.job+' '+x.dept+' '+x.note).toLowerCase().indexOf(q)>=0;});
+ var tb=R.reduce(function(a,x){return a+(x.budget||0);},0);
+ var tu=R.reduce(function(a,x){return a+x.used;},0);
+ var over=R.filter(function(x){return x.remain!=null&&x.remain<0;}).length;
+ var nob=R.filter(function(x){return x.budget==null;}).length;
+ var h='<div class="cards">'
+  +trnCard('Cost Sheet',R.length)
+  +trnCard('งบรวม',fmt2(tb)+' ฿')
+  +trnCard('ใช้จริงรวม',fmt2(tu)+' ฿')
+  +trnCard('คงเหลือรวม',fmt2(tb-tu)+' ฿')
+  +trnCard('เกินงบ',over+' รายการ')
+  +trnCard('ยังไม่ตั้งงบ',nob+' รายการ')
+  +'</div>';
+ h+='<div class="flex-between" style="margin:14px 0 8px"><div>'
+  +'<input class="s" style="min-width:240px" placeholder="ค้น Cost Sheet / Job / แผนก..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'</div><div><button class="btn sm" onclick="budEdit(\'\')">+ ตั้งงบ Cost Sheet ใหม่</button></div></div>';
+ h+='<div class="tbl-wrap"><table><thead><tr>'
+  +['Cost Sheet','Job','แผนก','งบ (Budget)','ใช้จริง','คงเหลือ','ใช้ไป %','เที่ยว','หมายเหตุ',''].map(function(c,i){
+     return '<th class="'+(i>=3&&i<=7?'num':'')+'">'+c+'</th>';}).join('')+'</tr></thead><tbody>';
+ h+=R.map(function(x){
+   var pct=(x.budget?Math.round(x.used*100/x.budget):null);
+   var col=x.remain==null?'#7a8699':(x.remain<0?'#c0392b':(pct>=90?'#b7791f':'#1f7a4d'));
+   return '<tr>'
+    +'<td><b>'+esc(x.cs)+'</b></td><td>'+esc(x.job)+'</td><td>'+esc(x.dept)+'</td>'
+    +'<td class="num">'+(x.budget==null?'<span class="muted">ยังไม่ตั้ง</span>':fmt2(x.budget))+'</td>'
+    +'<td class="num">'+fmt2(x.used)+'</td>'
+    +'<td class="num" style="color:'+col+';font-weight:700">'+(x.remain==null?'-':fmt2(x.remain))+'</td>'
+    +'<td class="num" style="color:'+col+'">'+(pct==null?'-':pct+'%')+'</td>'
+    +'<td class="num">'+x.n+'</td><td>'+esc(x.note)+'</td>'
+    +'<td><button class="btn ghost sm" onclick="budEdit(\''+esc(x.cs)+'\')">แก้งบ</button></td></tr>';}).join('');
+ h+='</tbody></table></div>';
+ h+='<div class="note info" style="margin-top:12px">'+R.length+' Cost Sheet &middot; <b style="color:#c0392b">แดง = เกินงบ</b> &middot; <b style="color:#b7791f">ส้ม = ใช้ไปเกิน 90%</b> &middot; กดปุ่ม "แก้งบ" เพื่อตั้ง/แก้งบประมาณ</div>';
+ return h;}
+async function budEdit(cs){
+ var b=budMap(), cur=cs?b[cs]:null;
+ var k=cs||prompt('Cost Sheet No. (เช่น CSP260510)','');if(k==null)return;k=String(k).trim();if(!k)return;
+ cur=b[k]||null;
+ var v=prompt('งบประมาณค่าขนส่งของ '+k+' (บาท)',cur?cur.budget:'');if(v==null)return;
+ var note=prompt('หมายเหตุ (เว้นว่างได้)',cur?cur.note:'');if(note==null)note='';
+ var u=trnByCS()[k]||{job:'',dept:''};
+ var ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='บันทึกงบ...';
+ try{
+  var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'setbudget',costSheet:k,budget:n2(v),
+     job:(cur&&cur.job)||u.job||'',dept:(cur&&cur.dept)||u.dept||'',note:note})});
+  var j=await r.json();ov.style.display='none';
+  if(!j||!j.ok)throw new Error((j&&j.error)||'บันทึกไม่สำเร็จ');
+  await loadDB();tab(3);trnGo(trnPage);
+ }catch(e){ov.style.display='none';alert('บันทึกไม่สำเร็จ: '+e.message);}}
+// ============================ หน้าที่ 2 — Raw data ============================
+function renderTRNraw(){
+ var H=trnH(),q=trnQ.trim().toLowerCase();
+ var rows=TRN.rows.filter(function(r){return !q||r.join(' ').toLowerCase().indexOf(q)>=0;});
+ var ic=ti('Ref. Cost Sheet No.');
+ var bm=budMap(),um=trnByCS();
+ var h='<div class="flex-between" style="margin:4px 0 8px"><div>'
+  +'<input class="s" style="min-width:280px" placeholder="ค้นทุกคอลัมน์..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'</div><div><button class="btn sm" onclick="trnAdd()">+ เพิ่มแถว</button> '
+  +'<button class="btn ghost sm" onclick="trnCsv()">CSV</button></div></div>';
+ h+='<div class="tbl-wrap"><table><thead><tr><th>แก้</th>'
+  +H.map(function(c){return '<th class="'+(/Amount|VAT|Total/.test(c)?'num':'')+'">'+esc(TRN_TH[c]||c)+'</th>';}).join('')
+  +'<th class="num">งบ</th><th class="num">คงเหลือ</th></tr></thead><tbody>';
+ h+=rows.map(function(r){
+   var cs=String(r[ic]||'').trim(), bg=bm[cs]?bm[cs].budget:null;
+   var rem=(bg==null?null:r2(bg-((um[cs]&&um[cs].used)||0)));
+   var col=rem==null?'#7a8699':(rem<0?'#c0392b':'#1f7a4d');
+   return '<tr><td><button class="btn ghost sm" onclick="trnEdit('+r._ri+')">แก้</button></td>'
+    +H.map(function(c,i){var v=r[i];
+      return '<td class="'+(/Amount|VAT|Total/.test(c)?'num':'')+'">'
+        +esc(/Amount|VAT|Total/.test(c)?(v===''||v==null?'':fmt2(v)):(isDate(c)?fmtDate(v):v))+'</td>';}).join('')
+    +'<td class="num">'+(bg==null?'-':fmt2(bg))+'</td>'
+    +'<td class="num" style="color:'+col+';font-weight:700">'+(rem==null?'-':fmt2(rem))+'</td></tr>';}).join('');
+ h+='</tbody></table></div>';
+ h+='<div class="note info" style="margin-top:12px">'+rows.length+' แถว &middot; 1 แถว = 1 บรรทัดอ้างอิงบนใบเสนอราคา &middot; ช่อง <b>งบ / คงเหลือ</b> คำนวณจาก Cost Sheet ของแถวนั้น</div>';
+ return h;}
+function trnBlank(){return trnH().map(function(c){return c==='Upload Date'?new Date().toISOString().slice(0,10):'';});}
+async function trnSave(rowIndex,vals){
+ var ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='บันทึก...';
+ try{
+  var body=(rowIndex==null)?{action:'addrows',sheet:'transport',rows:[vals]}
+                           :{action:'updaterow',sheet:'transport',rowIndex:rowIndex,values:vals};
+  var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
+  var j=await r.json();ov.style.display='none';
+  if(!j||!j.ok)throw new Error((j&&j.error)||'บันทึกไม่สำเร็จ');
+  await loadDB();tab(3);trnGo(trnPage);
+ }catch(e){ov.style.display='none';alert('บันทึกไม่สำเร็จ: '+e.message);}}
+function trnForm(vals,rowIndex){
+ var H=trnH();
+ var h='<div style="max-width:780px"><h3 style="margin:0 0 10px">'+(rowIndex==null?'เพิ่มแถวใหม่':'แก้ไขแถว')+'</h3>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px">';
+ H.forEach(function(c,i){
+  h+='<label style="font-size:12px;color:#7a8699">'+esc(TRN_TH[c]||c)
+   +'<input class="s" style="width:100%;margin-top:2px" id="tf'+i+'" value="'+esc(vals[i]==null?'':vals[i])+'"></label>';});
+ h+='</div><div style="margin-top:14px;text-align:right">'
+  +'<button class="btn ghost sm" onclick="renderTRN()">ยกเลิก</button> '
+  +(rowIndex==null?'':'<button class="btn ghost sm" style="color:#c0392b" onclick="trnDel('+rowIndex+')">ลบแถวนี้</button> ')
+  +'<button class="btn" onclick="trnSubmit('+(rowIndex==null?'null':rowIndex)+')">บันทึก</button></div></div>';
+ return h;}
+function trnSubmit(rowIndex){
+ var H=trnH(),vals=H.map(function(c,i){return document.getElementById('tf'+i).value;});
+ var ia=ti('Amount'),iv=ti('VAT'),it=ti('Total');
+ if(it>=0&&!String(vals[it]).trim())vals[it]=String(r2(n2(vals[ia])+n2(vals[iv])));
+ trnSave(rowIndex,vals);}
+function trnAdd(){document.getElementById('trnbody').innerHTML=trnForm(trnBlank(),null);}
+function trnEdit(ri){var r=TRN.rows.filter(function(x){return x._ri===ri;})[0];if(!r)return;
+ document.getElementById('trnbody').innerHTML=trnForm(trnH().map(function(c,i){return r[i];}),ri);}
+async function trnDel(ri){
+ if(!confirm('ลบแถวนี้ออกจากชีต Transport?'))return;
+ var ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='ลบ...';
+ try{var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+   body:JSON.stringify({action:'deleterow',sheet:'transport',rowIndex:ri})});
+  var j=await r.json();ov.style.display='none';
+  if(!j||!j.ok)throw new Error((j&&j.error)||'ลบไม่สำเร็จ');
+  await loadDB();tab(3);trnGo(1);
+ }catch(e){ov.style.display='none';alert('ลบไม่สำเร็จ: '+e.message);}}
+function trnCsv(){
+ var H=trnH(),lines=[H.join(',')].concat(TRN.rows.map(function(r){
+   return H.map(function(c,i){var v=r[i]==null?'':String(r[i]);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',');}));
+ var b=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+ var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='Transport_raw.csv';a.click();}
+// ======================= หน้าที่ 3 — MSBC Template =======================
+var TRN_MSBC=['Row No.','Receipt No.2','Receipt Line No.','G/L Temp','Type','No.','Part No.','G/L Account Name',
+ 'Description/Comment','Location Code','Quantity','Unit of Measure Code','Direct Unit Cost Excl. VAT','Line Discount %',
+ 'Line Amount Excl. VAT','VAT Difference','Gen. Prod. Posting Group','VAT Prod. Posting Group','WHT Product Posting Group',
+ 'Remark','Ref. Cost Sheet No.','Ref. Cost Sheet Line No.','Cost Sheet Remaining Amount','Department Code','Job No. Code',
+ 'Item no. Code','Item category Code','Cost sheet no. Code','VAT LINE Code','Employee Code','Subtotal Excl. VAT (THB)',
+ 'Inv. Discount Amount (THB)','Invoice Discount %','Total Excl. VAT (THB)','Total VAT (THB)','Total Incl. VAT (THB)'];
+function trnMsbcNum(i){return /Cost|Amount|Quantity|Row No|Remaining|Discount %|Line No/.test(TRN_MSBC[i]);}
+function trnMsbcRows(){
+ var q=trnQ.trim().toLowerCase();
+ var rows=TRN.rows.filter(function(r){return !q||r.join(' ').toLowerCase().indexOf(q)>=0;});
+ var iPo=ti('PO'),iJob=ti('Job No. Code'),iCs=ti('Ref. Cost Sheet No.'),iDp=ti('Department'),iAm=ti('Amount'),iRm=ti('Remark');
+ return rows.map(function(r,n){
+  var amt=r2(n2(r[iAm])), cs=String(r[iCs]||'').trim(), rem=remainOf(cs);
+  return [n+1,'',0,'','Item','Z-TRANSPORT','','','LOCAL TRANSPORT - '+(r[iPo]||''),'',1,'UNIT',amt,0,amt,'',
+   '5112006','NOVAT','TRANSPORT',(r[iRm]||''),cs,30000,(rem==null?'':rem),(r[iDp]||'VP'),(r[iJob]||''),
+   'Z-TRANSPORT','Z-OTHERS','','','','','','','','',''];});}
+function renderTRNmsbc(){
+ var L=trnMsbcRows();
+ var h='<div class="flex-between" style="margin:4px 0 8px"><div>'
+  +'<input class="s" style="min-width:280px" placeholder="ค้น Cost Sheet / PO / Job..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'</div><div><button class="btn sm" onclick="trnCopy()">คัดลอกทั้งตาราง</button> '
+  +'<button class="btn green sm" onclick="trnXlsx()">Excel</button></div></div>';
+ h+='<div class="tbl-wrap"><table class="rep"><thead><tr>'
+  +TRN_MSBC.map(function(c,i){return '<th class="'+(trnMsbcNum(i)?'num':'')+'">'+esc(c)+'</th>';}).join('')
+  +'</tr></thead><tbody>';
+ h+=L.map(function(a){return '<tr>'+a.map(function(v,i){
+   return '<td class="'+(trnMsbcNum(i)?'num':'')+'">'
+     +esc(typeof v==='number'&&/Cost|Amount|Remaining/.test(TRN_MSBC[i])?fmt2(v):v)+'</td>';}).join('')+'</tr>';}).join('');
+ h+='</tbody></table></div>';
+ var tot=L.reduce(function(a,x){return a+n2(x[12]);},0);
+ h+='<div class="note info" style="margin-top:12px">'+L.length+' บรรทัด &middot; รวม '+fmt2(tot)
+  +' &#3647; &middot; คอลัมน์ตรงไฟล์ Template #Transport 36 ช่อง &middot; ช่อง <b>Cost Sheet Remaining Amount</b> คือคงเหลือหลังหักค่าส่งทั้งหมดของ Cost Sheet นั้น</div>';
+ return h;}
+function trnCopy(){
+ var L=trnMsbcRows();if(!L.length){alert('ไม่มีข้อมูล');return;}
+ var txt=[TRN_MSBC.join('\t')].concat(L.map(function(a){return a.map(function(v){return v==null?'':v;}).join('\t');})).join('\n');
+ navigator.clipboard.writeText(txt).then(function(){alert('คัดลอกแล้ว '+L.length+' บรรทัด — วางลง Business Central ได้เลย');},
+  function(){var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();alert('คัดลอกแล้ว');});}
+async function trnXlsx(){
+ var L=trnMsbcRows();if(!L.length){alert('ไม่มีข้อมูล');return;}
+ await loadX();var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Template #Transport');
+ ws.columns=TRN_MSBC.map(function(c){return {header:c,width:Math.min(30,Math.max(10,c.length+2))};});
+ ws.getRow(1).eachCell(function(c){c.font={name:'Arial',bold:true,color:{argb:'FFFFFFFF'},size:9};
+  c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E5496'}};c.alignment={horizontal:'center',wrapText:true};});
+ L.forEach(function(a){ws.addRow(a);});
+ [13,15,23].forEach(function(i){ws.getColumn(i).numFmt='0.00';});
+ ws.views=[{state:'frozen',ySplit:1}];
+ var buf=await wb.xlsx.writeBuffer(),b=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ var a=document.createElement('a');a.href=window.URL.createObjectURL(b);a.download='Template_Transport.xlsx';a.click();}
+// ---- ตัวคุมหน้าย่อย ----
+function renderTRN(){
+ var el=document.getElementById('trnbody');if(!el)return;
+ if(!TRN.head||!TRN.head.length)TRN.head=TRN_HEAD.slice();
+ if(!BUD.head||!BUD.head.length)BUD.head=BUD_HEAD.slice();
+ el.innerHTML = trnPage===0?renderTRNmon() : trnPage===1?renderTRNraw() : renderTRNmsbc();}
+
 </script>
 </body></html>
