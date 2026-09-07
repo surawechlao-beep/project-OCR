@@ -1162,9 +1162,350 @@ async function trnXlsx(){
 // ---- ตัวคุมหน้าย่อย ----
 function renderTRN(){
  var el=document.getElementById('trnbody');if(!el)return;
+ var _pre=trnUpBox()+trnQueueHtml();
  if(!TRN.head||!TRN.head.length)TRN.head=TRN_HEAD.slice();
  if(!BUD.head||!BUD.head.length)BUD.head=BUD_HEAD.slice();
- el.innerHTML = trnPage===0?renderTRNmon() : trnPage===1?renderTRNraw() : renderTRNmsbc();}
+ el.innerHTML = _pre + (trnPage===0?renderTRNmon() : trnPage===1?renderTRNraw() : renderTRNmsbc());}
+
+
+/* ============================================================================
+ *  🚚 อ่านใบเสนอราคาขนส่งในประเทศอัตโนมัติ  (เพิ่ม 7 ก.ย. 69)
+ *  โยนไฟล์ในแถบ Local transport -> อ่านเอง -> ผ่านตัวตรวจ = ลงชีตเลย
+ *  รองรับ PDF ดิจิทัล 2 เจ้า · โชคนรินทร์ส่งเป็นสแกน ให้อัปเก็บไว้เฉย ๆ แล้วกรอกมือ
+ * ========================================================================== */
+var TRN_PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+var TRN_PDFWK = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+var TRNQUEUE = [];          // ใบที่อ่านแล้วแต่ยังไม่ผ่าน รอคนตรวจ
+var _pdfjsReady = null;
+
+function trnLoadPdfjs(){
+  if (_pdfjsReady) return _pdfjsReady;
+  _pdfjsReady = new Promise(function(res, rej){
+    if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = TRN_PDFWK; return res(window.pdfjsLib); }
+    var s = document.createElement('script');
+    s.src = TRN_PDFJS;
+    s.onload = function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = TRN_PDFWK; res(window.pdfjsLib); };
+    s.onerror = function(){ rej(new Error('โหลดตัวอ่าน PDF ไม่ได้ (ต้องต่อเน็ต)')); };
+    document.head.appendChild(s);
+  });
+  return _pdfjsReady;
+}
+
+/* ---------------- ตัวอ่าน (ทดสอบกับใบจริง 9 ใบ ตรงทุกช่อง) ---------------- */
+function trnLinesFromItems(items){
+  var by = {};
+  items.forEach(function(it){
+    if (!it.str) return;
+    var y = Math.round(it.transform[5] * 2) / 2;
+    (by[y] = by[y] || []).push({ x: it.transform[4], s: it.str });
+  });
+  return Object.keys(by).sort(function(a,b){ return b-a; })
+    .map(function(y){ return by[y].sort(function(a,b){ return a.x-b.x; })
+      .map(function(o){ return o.s; }).join(' ').replace(/\s+/g,' ').trim(); })
+    .filter(function(s){ return s; });
+}
+var TRN_VENDORS = [
+  { key:'CHOKUDOMSAB', name:'CHOKUDOMSAB SERVICE CO.,LTD.',            digital:true  },
+  { key:'PORNTHADA',   name:'PORNTHADA LIMITED PARTNERSHIP',           digital:true  },
+  { key:'CHOKNARIN',   name:'CHOKNARIN TRANSPORT LIMITED PARTNERSHIP', digital:false }
+];
+function trnNum(s){ var v = parseFloat(String(s==null?'':s).replace(/,/g,'')); return isFinite(v)?v:null; }
+function trnR2(v){ return Math.round(v*100)/100; }
+function trnDate(s){
+  var m = String(s||'').trim().match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (!m) return '';
+  var d=+m[1], mo=+m[2], y=+m[3];
+  if (y<100) y += (y>=50 ? 2500 : 2000);
+  if (y>2400) y -= 543;
+  if (d>31 || mo>12 || mo<1) return '';
+  return y+'-'+('0'+mo).slice(-2)+'-'+('0'+d).slice(-2);
+}
+var TRN_REF_RE = /([A-Z]{1,4}\d{5,8})\/([A-Za-z0-9]{3,12})\/([A-Za-z0-9]{3,12})\/([A-Z]{0,4})\/?([\d,]+(?:\.\d+)?)\/([^\/]{1,40}?)(?=[A-Z]{1,4}\d{5,8}\/|$)/g;
+function trnRefs(block){
+  var g = String(block||'').replace(/\s+/g,''), out=[], m;
+  TRN_REF_RE.lastIndex = 0;
+  while ((m = TRN_REF_RE.exec(g)) !== null)
+    out.push({ PO:m[1], Job:m[2], CS:m[3], Dept:m[4]||'', Amount:trnNum(m[5]), Cust:String(m[6]||'').trim() });
+  return out;
+}
+function trnRefBlock(lines){
+  var s=-1, e=lines.length;
+  for (var i=0;i<lines.length;i++){
+    var L = lines[i];
+    if (s<0 && /อ\s*้?\s*างอิง|เลข\s*PO/.test(L)) s = i;
+    else if (s>=0 && /หมายเห|Totel|ประเภทสินค|ค่าแรงงาน|กรุณา|\*\*\*/.test(L)) { e = i; break; }
+  }
+  if (s<0) return '';
+  return lines.slice(s,e).join('\n').replace(/^\s*(อ\s*้?\s*างอิง|เลข\s*PO)\s*:?\s*/,'');
+}
+function trnDest(lines, mainRe){
+  var out=[], seen={};
+  function add(v){ v = String(v||'').replace(/\s+/g,' ').trim(); if (v && !seen[v]) { seen[v]=1; out.push(v); } }
+  for (var i=0;i<lines.length;i++){
+    var L = lines[i];
+    if (/หมายเห|กรุณา|Totel|ประกันภัย|\*\*\*/.test(L)) break;
+    var m = L.match(mainRe); if (m) { add(m[1]); continue; }
+    m = L.match(/จุดที่\s*\d\s*\.?\s*:?\s*(.+)/);
+    if (m && !/Pallet|Kg|กล่อง/i.test(m[1])) add(m[1]);
+  }
+  return out.join(' / ');
+}
+function trnMoneyNear(lines, labelRe){
+  var MON = /([\d,]+\.\d\d)/;
+  for (var i=0;i<lines.length;i++){
+    if (!labelRe.test(lines[i])) continue;
+    var m = lines[i].match(MON); if (m) return trnNum(m[1]);
+    if (i>0)             { m = lines[i-1].match(MON); if (m) return trnNum(m[1]); }
+    if (i+1<lines.length){ m = lines[i+1].match(MON); if (m) return trnNum(m[1]); }
+  }
+  return null;
+}
+function trnClean(s){ return String(s||'').replace(/^[^\wก-๙(]+/,'').replace(/\s+/g,' ').trim(); }
+
+function trnParse(lines, fileName){
+  var t = lines.join('\n');
+  if (t.replace(/\s/g,'').length < 60)
+    return { ok:false, scan:true, file:fileName, why:'ไฟล์สแกน (ไม่มีตัวหนังสือในไฟล์) อ่านอัตโนมัติไม่ได้' };
+  var vd = null;
+  for (var i=0;i<TRN_VENDORS.length;i++) if (t.indexOf(TRN_VENDORS[i].key)>=0) { vd = TRN_VENDORS[i]; break; }
+  if (!vd)         return { ok:false, scan:false, file:fileName, why:'ไม่รู้จักผู้ให้บริการรายนี้ (รองรับ 3 เจ้า)' };
+  if (!vd.digital) return { ok:false, scan:true,  file:fileName, vendor:vd.name, why:'ไฟล์สแกน อ่านอัตโนมัติไม่ได้' };
+
+  var o = { ok:true, scan:false, file:fileName, vendor:vd.name, warn:[] };
+  function g(re,i){ var m = t.match(re); return m ? String(m[i||1]).trim() : ''; }
+  if (vd.key === 'CHOKUDOMSAB') {
+    o.no    = g(/Number\s*:\s*(\S+)/);
+    o.qdate = trnDate(g(/Date\s*:\s*(\S+)/));
+    o.ddate = trnDate(g(/(?:ปฏิบ\S*งานวันที่|วันที่รับสิ\S*นค้า)\s*:?\s*(\S+)/)) || o.qdate;
+    var mv  = t.match(/(\d)\s*ล\s*้?\s*อ\s*(เฮี๊ยบ|ตู้ทึบ)?/);
+    o.veh   = mv ? (mv[1]+' ล้อ'+(mv[2]||'')) : '';
+    if (!o.veh) o.warn.push('อ่านประเภทรถไม่ได้ (ตัวเลขในไฟล์เสีย) — กรอกเอง');
+    o.from  = trnClean(g(/สถานที่รับสิ\S*นค้า\s*:?\s*(.+)/));
+    o.to    = trnDest(lines, /สถานที่ส่งสิ\S*นค้า\s*:?\s*(.+)/);
+  } else {
+    o.no    = g(/(QPTD\S+)/);
+    o.qdate = trnDate(g(/(\d{2}\/\d{2}\/\d{4})/));
+    o.ddate = trnDate(g(/วันที.ส่งสินค\s*.า[^\d]*(\d{2}-\d{2}-\d{2})/)) || o.qdate;
+    o.veh   = g(/ประเภทรถ\s+(.+)/);
+    o.from  = trnClean(g(/สถานที.รับสินค\s*.า\s+(.+)/));
+    o.to    = trnDest(lines, /สถานที.ส่งจุดที\s*\d\.?\s*:\s*(.+)/);
+  }
+  o.net   = trnMoneyNear(lines, /Totel/);
+  o.vat   = trnMoneyNear(lines, /\(\s*Vat\s*\)|Vat\s*\)\s*7/);
+  o.gross = trnMoneyNear(lines, /Grand\s*Total/);
+  if (o.net == null) {
+    o.net   = trnNum(g(/ค่าขนส่ง\s+([\d,]+\.?\d*)/));
+    o.gross = trnNum(g(/ราคารวมทั\S*สิ\S*\s+([\d,]+\.?\d*)/));
+    if (o.vat == null) o.vat = (o.net!=null && o.gross!=null) ? trnR2(o.gross-o.net) : 0;
+  }
+  if (o.gross == null && o.net != null) o.gross = trnR2(o.net + (o.vat||0));
+
+  o.refs    = trnRefs(trnRefBlock(lines));
+  var sum   = o.refs.reduce(function(a,r){ return a+(r.Amount||0); }, 0);
+  o.sumRefs = trnR2(sum);
+  o.checkSum = (o.net!=null && o.refs.length>0 && Math.abs(sum-o.net)<0.01);
+  o.checkVat = (o.vat===0) || (o.net!=null && o.vat!=null && Math.abs(trnR2(o.net*0.07)-o.vat)<0.02);
+  if (!o.refs.length)   o.warn.push('อ่านบรรทัดอ้างอิงไม่ได้เลย');
+  else if (!o.checkSum) o.warn.push('ผลรวมบรรทัดอ้างอิง '+fmt2(o.sumRefs)+' ไม่เท่ายอดก่อน VAT '+(o.net==null?'(อ่านไม่ได้)':fmt2(o.net)));
+  if (!o.checkVat) o.warn.push('VAT ไม่เท่า 7% ของยอดก่อน VAT');
+  if (!o.no)       o.warn.push('อ่านเลขที่ใบเสนอราคาไม่ได้');
+  if (!o.ddate)    o.warn.push('อ่านวันที่ส่งไม่ได้');
+  o.ok = o.checkSum && o.checkVat && !!o.no && !!o.ddate;
+  return o;
+}
+
+/* -------- เทียบกับ Job Master: เจอเลขไม่ตรง -> เตือน + เสนอเลขที่น่าจะใช่ -------- */
+function trnJMIndex(){
+  if (window._TRNJM) return window._TRNJM;
+  var H = JOBMASTER.head||[], R = JOBMASTER.rows||[];
+  if (!H.length) return null;
+  var iP=H.indexOf('Ref. Docu No.'), iJ=H.indexOf('Job No. Code'),
+      iC=H.indexOf('Ref. Cost Sheet No.'), iD=H.indexOf('Department Code');
+  if (iP<0) return null;
+  var byPO = {};
+  R.forEach(function(r){
+    var po = String(r[iP]||'').trim(); if (!po) return;
+    var t = { job:String(r[iJ]||'').trim(), cs:String(r[iC]||'').trim(), dept:String(r[iD]||'').trim() };
+    (byPO[po] = byPO[po] || []).push(t);
+  });
+  return (window._TRNJM = byPO);
+}
+function trnCheckRef(r){
+  var jm = trnJMIndex(); if (!jm) return { note:'', fix:null };
+  var L = jm[r.PO];
+  if (!L) {                                   // PO ไม่มีเลย -> หา PO ที่ Job+CS ตรง
+    var hit = null;
+    Object.keys(jm).some(function(po){
+      return jm[po].some(function(t){
+        if (t.job===r.Job && t.cs===r.CS) { hit = { PO:po, Dept:t.dept }; return true; }
+        return false; }); });
+    return hit ? { note:'PO '+r.PO+' ไม่มีในระบบ', fix:{ PO:hit.PO, Dept:r.Dept||hit.Dept }, why:'Job+Cost Sheet ตรงกับ '+hit.PO }
+               : { note:'PO '+r.PO+' ไม่มีในระบบ (หาเลขที่ใกล้เคียงไม่ได้)', fix:null };
+  }
+  var jobs={}, css={};
+  L.forEach(function(t){ jobs[t.job]=1; css[t.cs]=1; });
+  var badJob = !jobs[r.Job], badCS = !css[r.CS];
+  if (!badJob && !badCS) {
+    if (!r.Dept) { var d = (L.filter(function(t){ return t.job===r.Job && t.cs===r.CS; })[0]||L[0]).dept;
+                   if (d) return { note:'ใบไม่ได้ระบุแผนก', fix:{ Dept:d }, why:'Job Master ว่า '+d }; }
+    return { note:'', fix:null };
+  }
+  function uniq(list, k){ var seen={}, out=[]; list.forEach(function(t){ if(t[k] && !seen[t[k]]){ seen[t[k]]=1; out.push(t);} }); return out; }
+  if (badJob && !badCS) {
+    var c1 = uniq(L.filter(function(t){ return t.cs===r.CS; }), 'job');
+    if (c1.length===1) return { note:'Job '+r.Job+' ไม่ตรง', fix:{ Job:c1[0].job, Dept:r.Dept||c1[0].dept }, why:'PO+Cost Sheet ชี้ไปที่ '+c1[0].job };
+  }
+  if (badCS && !badJob) {
+    var c2 = uniq(L.filter(function(t){ return t.job===r.Job; }), 'cs');
+    if (c2.length===1) return { note:'Cost Sheet '+r.CS+' ไม่ตรง', fix:{ CS:c2[0].cs, Dept:r.Dept||c2[0].dept }, why:'PO+Job ชี้ไปที่ '+c2[0].cs };
+  }
+  if (badJob && badCS) {                      /* ผิดทั้งคู่ -> ถ้า PO นี้มีชุดเดียวก็เสนอชุดนั้น */
+    var c3 = uniq(L, 'cs');
+    if (c3.length===1) return { note:'Job+Cost Sheet ไม่ตรง', fix:{ Job:c3[0].job, CS:c3[0].cs, Dept:r.Dept||c3[0].dept }, why:'PO นี้มีชุดเดียวคือ '+c3[0].job+' / '+c3[0].cs };
+  }
+  return { note:(badJob?'Job '+r.Job+' ':'')+(badCS?'Cost Sheet '+r.CS+' ':'')+'ไม่มีใน PO นี้', fix:null };
+}
+
+/* ------------------------------- หน้าจอ ------------------------------- */
+function trnUpBox(){
+  return '<div id="trndrop" style="border:2px dashed #b9c4d4;border-radius:12px;padding:16px;text-align:center;background:#fbfcfe;margin:0 0 14px"'
+   +' ondragover="event.preventDefault();this.style.background=\'#eef4ff\'"'
+   +' ondragleave="this.style.background=\'#fbfcfe\'"'
+   +' ondrop="event.preventDefault();this.style.background=\'#fbfcfe\';trnFiles(event.dataTransfer.files)">'
+   +'<div style="font-size:14px;margin-bottom:6px"><b>📤 โยนใบเสนอราคาขนส่งลงตรงนี้</b> — อ่านให้อัตโนมัติ</div>'
+   +'<div class="muted" style="font-size:12px;margin-bottom:10px">โชคอุดมทรัพย์ · พรธาดา อ่านได้ทันที &middot; โชคนรินทร์เป็นไฟล์สแกน ระบบจะเก็บไฟล์ไว้ให้แล้วกรอกเอง</div>'
+   +'<input type="file" id="trnfile" accept="application/pdf" multiple style="display:none" onchange="trnFiles(this.files);this.value=\'\'">'
+   +'<button class="btn sm" onclick="document.getElementById(\'trnfile\').click()">เลือกไฟล์</button>'
+   +'<div id="trnupmsg" style="margin-top:10px;font-size:13px"></div></div>';
+}
+function trnMsg(h){ var e = document.getElementById('trnupmsg'); if (e) e.innerHTML = h; }
+
+async function trnFiles(fl){
+  var files = [].slice.call(fl||[]).filter(function(f){ return /\.pdf$/i.test(f.name); });
+  if (!files.length) return;
+  trnMsg('⏳ กำลังอ่าน '+files.length+' ไฟล์...');
+  try { await trnLoadPdfjs(); } catch(e){ trnMsg('<span style="color:#c0392b">'+esc(e.message)+'</span>'); return; }
+  if (!(JOBMASTER.rows||[]).length) { trnMsg('⏳ ดึงตาราง PR มาตรวจเลขก่อน (ครั้งเดียว)...'); await loadJM(); window._TRNJM=null; }
+  var done = [], saved = 0;
+  for (var i=0;i<files.length;i++){
+    var f = files[i];
+    trnMsg('⏳ ('+(i+1)+'/'+files.length+') '+esc(f.name));
+    var o;
+    try {
+      var buf = await f.arrayBuffer();
+      var doc = await window.pdfjsLib.getDocument({ data:new Uint8Array(buf) }).promise;
+      var lines = [];
+      for (var p=1;p<=doc.numPages;p++){
+        var pg = await doc.getPage(p), c = await pg.getTextContent();
+        lines = lines.concat(trnLinesFromItems(c.items));
+      }
+      o = trnParse(lines, f.name);
+    } catch(e){ o = { ok:false, scan:false, file:f.name, why:'เปิดไฟล์ไม่ได้: '+e.message }; }
+    o._file = f;
+    try { await trnArchive(f); } catch(e){}                 // เก็บไฟล์เข้า Drive เสมอ
+    o.refs = (o.refs||[]).map(function(r){ r._chk = trnCheckRef(r); return r; });
+    o.dupe = trnDupe(o);
+    o.clean = o.ok && !o.dupe && o.refs.every(function(r){ return !r._chk.note; });
+    if (o.clean) { await trnSaveQuote(o, true); saved++; }
+    else TRNQUEUE.push(o);
+    done.push(o);
+  }
+  trnMsg('');
+  if (saved) await loadDB();
+  tab(3); trnGo(TRNQUEUE.length ? 1 : trnPage);
+  var okN = done.filter(function(o){ return o.clean; }).length;
+  alert('อ่าน '+done.length+' ใบ\n✅ ผ่านและลงชีตแล้ว '+okN+' ใบ\n⚠️ ต้องตรวจ '+(done.length-okN)+' ใบ'
+        +(done.length-okN ? '\n\nดูรายการที่ต้องตรวจในหน้า Raw data' : ''));
+  renderTRN();
+}
+async function trnArchive(f){
+  var b64 = await fileB64(f);
+  return fetch(URL_AS,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({ name:f.name, mimeType:f.type||'application/pdf', base64:b64 }) });
+}
+function trnDupe(o){
+  var H = trnH(), iq = H.indexOf('Quotation No.'), id = H.indexOf('Quotation Date'), ip = H.indexOf('PO');
+  if (iq<0) return false;
+  var n = 0;
+  (TRN.rows||[]).forEach(function(r){
+    if (String(r[iq])===String(o.no) && String(r[id])===String(o.qdate)) n++;
+  });
+  return n>0 ? ('ใบนี้ลงไปแล้ว '+n+' แถว') : false;
+}
+function trnRowsOf(o){
+  var H = trnH(), today = new Date().toISOString().slice(0,10), n = o.refs.length;
+  return o.refs.map(function(r,i){
+    var vat = (o.vat===0) ? 0 : trnR2((r.Amount||0)*0.07);
+    var v = {'Delivery Date':o.ddate,'Vendor':o.vendor,'Quotation No.':o.no,'Quotation Date':o.qdate,
+      'PO':r.PO,'Job No. Code':r.Job,'Ref. Cost Sheet No.':r.CS,'Department':r.Dept,
+      'Pickup Location':o.from,'Delivery Location':o.to,'Vehicle':o.veh,
+      'Amount':(r.Amount||0).toFixed(2),'VAT':vat.toFixed(2),'Total':trnR2((r.Amount||0)+vat).toFixed(2),
+      'Ref Line':(i+1)+'/'+n,'Remark':o.note||'','Upload Date':today,'Reviewed':''};
+    return H.map(function(c){ return v[c]==null ? '' : String(v[c]); });
+  });
+}
+async function trnSaveQuote(o, quiet){
+  var rows = trnRowsOf(o);
+  var r = await fetch(URL_AS,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({ action:'addrows', sheet:'transport', rows:rows }) });
+  var j = await r.json();
+  if (!j || !j.ok) throw new Error((j&&j.error)||'บันทึกไม่สำเร็จ');
+  var p = TRNQUEUE.indexOf(o); if (p>=0) TRNQUEUE.splice(p,1);
+  if (!quiet) { await loadDB(); tab(3); trnGo(1); }
+  return true;
+}
+/* ปุ่ม "ใช้เลขที่ระบบแนะนำ" */
+function trnFix(qi, ri){
+  var o = TRNQUEUE[qi]; if (!o) return;
+  var r = o.refs[ri], fx = r._chk && r._chk.fix; if (!fx) return;
+  if (fx.PO)   r.PO   = fx.PO;
+  if (fx.Job)  r.Job  = fx.Job;
+  if (fx.CS)   r.CS   = fx.CS;
+  if (fx.Dept) r.Dept = fx.Dept;
+  r._chk = trnCheckRef(r);
+  o.clean = o.ok && !o.dupe && o.refs.every(function(x){ return !x._chk.note; });
+  renderTRN();
+}
+async function trnQueueSave(qi){
+  var o = TRNQUEUE[qi]; if (!o) return;
+  var ov = document.getElementById('ov'), ot = document.getElementById('ovt');
+  ov.style.display='flex'; ot.textContent='บันทึก...';
+  try { await trnSaveQuote(o,true); await loadDB(); ov.style.display='none'; tab(3); trnGo(1); renderTRN(); }
+  catch(e){ ov.style.display='none'; alert('บันทึกไม่สำเร็จ: '+e.message); }
+}
+function trnQueueDrop(qi){ TRNQUEUE.splice(qi,1); renderTRN(); }
+
+/* การ์ดเหลือง — ใบที่ยังไม่ผ่าน */
+function trnQueueHtml(){
+  if (!TRNQUEUE.length) return '';
+  return TRNQUEUE.map(function(o,qi){
+    var head = '<div style="border:1px solid #e2c14d;background:#fffbe9;border-radius:10px;padding:12px 14px;margin:0 0 10px">'
+      +'<div class="flex-between"><div><b>⚠️ '+esc(o.file)+'</b>'
+      +(o.vendor?' <span class="muted">· '+esc(o.vendor)+'</span>':'')
+      +(o.no?' <span class="muted">· เลขที่ '+esc(o.no)+' · '+esc(o.qdate||'')+'</span>':'')+'</div>'
+      +'<div><button class="btn ghost sm" onclick="trnQueueDrop('+qi+')">ทิ้ง</button> '
+      +(o.refs&&o.refs.length?'<button class="btn sm" onclick="trnQueueSave('+qi+')">บันทึกทั้งใบ</button>':'')+'</div></div>';
+    var body = '';
+    if (o.dupe) body += '<div style="color:#c0392b;font-size:13px;margin-top:6px">🔁 '+esc(o.dupe)+'</div>';
+    if (o.why)  body += '<div style="font-size:13px;margin-top:6px">'+esc(o.why)+(o.scan?' — ไฟล์เก็บเข้า Drive ให้แล้ว กด <b>+ เพิ่มแถว</b> กรอกเองได้เลย':'')+'</div>';
+    (o.warn||[]).forEach(function(w){ body += '<div style="font-size:13px;margin-top:4px">• '+esc(w)+'</div>'; });
+    if (o.refs && o.refs.length){
+      body += '<div style="font-size:13px;margin-top:8px">ยอดก่อน VAT '+fmt2(o.net||0)+' · VAT '+fmt2(o.vat||0)+' · รวม '+fmt2(o.gross||0)+'</div>';
+      body += '<table style="width:100%;margin-top:6px;font-size:13px"><tbody>'
+        + o.refs.map(function(r,ri){
+            var c = r._chk||{};
+            return '<tr><td>'+esc(r.PO)+'</td><td>'+esc(r.Job)+'</td><td>'+esc(r.CS)+'</td><td>'+esc(r.Dept||'-')+'</td>'
+              +'<td class="num">'+fmt2(r.Amount||0)+'</td><td>'
+              +(c.note ? '<span style="color:#a67c00">⚠️ '+esc(c.note)+'</span>'
+                  +(c.fix ? ' <button class="btn ghost sm" onclick="trnFix('+qi+','+ri+')">ใช้ '
+                      +esc(c.fix.PO||c.fix.Job||c.fix.CS||c.fix.Dept)+'</button> <span class="muted">('+esc(c.why||'')+')</span>' : '')
+                  : '<span style="color:#1f7a4d">✓</span>')
+              +'</td></tr>'; }).join('')
+        + '</tbody></table>';
+    }
+    return head + body + '</div>';
+  }).join('');
+}
 
 </script>
 </body></html>
