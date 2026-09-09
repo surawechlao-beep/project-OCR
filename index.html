@@ -110,7 +110,7 @@ mark{background:#fff3a8}
       <span class="pill" id="ps" onclick="setView('sum')">🧾 รวมราย HAWB</span>
       <span class="pill" id="pd2" onclick="setView('duty')">📄 Summary Duty</span>
       <button class="btn ghost sm" onclick="window.open(DRIVE_PROCESSED_URL,'_blank')" title="ดูไฟล์ที่ประมวลผลแล้ว (OSA Processed แยกตาม HAWB/PO)">📂 เอกสารที่ประมวลผลแล้ว</button>
-      <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+      <button class="btn ghost sm" onclick="loadDB(1)">↻ รีเฟรช</button>
     </div>
   </div>
   <div class="cards" id="stats"></div>
@@ -125,7 +125,7 @@ mark{background:#fff3a8}
 <div class="screen" id="t2">
   <div class="flex-between">
     <h2 class="title">MSBC Template — สร้าง journal ลง Business Central</h2>
-    <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+    <button class="btn ghost sm" onclick="loadDB(1)">↻ รีเฟรช</button>
   </div>
   <p class="muted">เลือกใบขน + ชนิดเอกสาร → ระบบสร้างบรรทัด journal ตามเทมเพลต MSBC (เลือก GLI/DHL และเคส 1PO/หลาย PO อัตโนมัติ) → กดออก Excel ลง Business Central ได้เลย</p>
   <div class="flex-between">
@@ -155,7 +155,7 @@ mark{background:#fff3a8}
 <div class="screen" id="t3">
   <div class="flex-between">
     <h2 class="title">🚚 Local transport — ค่าขนส่งในประเทศ</h2>
-    <button class="btn ghost sm" onclick="loadDB()">↻ รีเฟรช</button>
+    <button class="btn ghost sm" onclick="loadDB(1)">↻ รีเฟรช</button>
   </div>
   <p class="muted">ใบเสนอราคาขนส่ง 1 ใบแตกเป็นหลายบรรทัดตาม Cost Sheet → ตั้งงบไว้ล่วงหน้า แล้วดูว่าแต่ละ Cost Sheet เหลือเท่าไหร่หลังหักค่าส่งจริง</p>
   <div style="margin:10px 0 14px">
@@ -227,6 +227,9 @@ function tab(n){document.querySelectorAll('.screen').forEach((e,i)=>e.classList.
  if(n===3)renderTRN();}
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 function hl(t,qs){t=String(t==null?'':t);if(!qs)return esc(t);const i=t.toLowerCase().indexOf(qs);if(i<0)return esc(t);return esc(t.slice(0,i))+'<mark>'+esc(t.slice(i,i+qs.length))+'</mark>'+esc(t.slice(i+qs.length));}
+// esc() ไม่ครอบ " กับ ' — ใส่ค่าลงใน attribute ต้องใช้ตัวนี้ ไม่งั้นพิมพ์ " ในช่องค้นหาแล้ว HTML พัง
+function escA(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function focusQ(){const el=document.getElementById('q');if(el){const v=el.value;el.focus();el.setSelectionRange(v.length,v.length);}}
 const isNum=h=>/duty|vat|gross|value|amount|charge|actual|before|unit cost|ต้นทุน|มูลค่า|อากร|น้ำหนัก/i.test(h)&&!/currency|reviewed/i.test(h);
 function fmtCell(v){if(typeof v==='number'&&!Number.isInteger(v))return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});return v;}
@@ -306,10 +309,13 @@ async function asJson(url){
  }
  try{ return JSON.parse(t); }catch(_){ throw new Error('ข้อมูลที่ได้ไม่ใช่ JSON: '+head.slice(0,120)); }
 }
-async function loadDB(){
- const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent='⬇ ดึงข้อมูลกลางจาก Google Drive...';
+// fresh=true → ส่ง &fresh=1 บอกฝั่ง Apps Script ให้ล้างแคชแล้วอ่านชีตของจริงใหม่ทั้งหมด
+// ใช้กับปุ่ม ↻ เท่านั้น · การโหลดหลังกดเซฟไม่ต้องใช้ เพราะฝั่งเซิร์ฟเวอร์ล้างแคชให้แล้วตอนเขียน
+async function loadDB(fresh){
+ const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';
+ ot.textContent=fresh?'⬇ ดึงข้อมูลสดจาก Google Drive...':'⬇ ดึงข้อมูลกลางจาก Google Drive...';
  try{
-   const d=normDates(await asJson(URL_AS+'?action=db'));
+   const d=normDates(await asJson(URL_AS+'?action=db'+(fresh?'&fresh=1':'')));
    if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
    setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
    buildFrtMap(d.freight);INBOX=d.inbox||[];setTRN(d);
@@ -331,10 +337,10 @@ async function loadDB(){
      POJOBIDX=c.pojob||null;POJOB=null;
      renderInbox();render();
      document.getElementById('hb').innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
-     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+') • <a href="#" onclick="loadDB();return false">ลองโหลดใหม่</a>';
+     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+') • <a href="#" onclick="loadDB(1);return false">ลองโหลดใหม่</a>';
    }else{
      document.getElementById('stats').innerHTML='';
-     document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB()">ลองใหม่</button></td></tr></tbody>';
+     document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB(1)">ลองใหม่</button></td></tr></tbody>';
      document.getElementById('hb').innerHTML='● เชื่อม Drive ไม่ได้';
    }
  }
@@ -355,7 +361,7 @@ async function clearInbox(){
 function renderInbox(){
  // รายการนี้เป็น snapshot ตอนโหลดหน้า — มีปุ่ม 🔄 ให้ดึงสถานะจริงจาก Drive ได้ทันที
  // INBOX === null = โหลดจาก Drive ไม่สำเร็จ (กำลังใช้ข้อมูลสำรอง) → ห้ามโชว์รายชื่อไฟล์เก่า
- var rf=' <a href="#" onclick="loadDB();return false" style="font-size:11px;color:#2563eb;text-decoration:none">🔄 เช็ค Inbox ใหม่</a>';
+ var rf=' <a href="#" onclick="loadDB(1);return false" style="font-size:11px;color:#2563eb;text-decoration:none">🔄 เช็ค Inbox ใหม่</a>';
  document.getElementById('inbox').innerHTML= (INBOX===null)
   ? '<span style="color:#b45309;font-weight:600">⚠️ ยังไม่ทราบสถานะ Inbox — เชื่อม Google Drive ไม่ได้ (ที่เห็นบนจอเป็นข้อมูลสำรองชุดเก่า อย่าเพิ่งเชื่อ)</span>'+rf
   : INBOX.length
@@ -1003,8 +1009,9 @@ function renderTRNmon(){
   +trnCard('ยังไม่ตั้งงบ',nob+' รายการ')
   +'</div>';
  h+='<div class="flex-between" style="margin:14px 0 8px"><div>'
-  +'<input class="s" style="min-width:240px" placeholder="ค้น Cost Sheet / Job / แผนก..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
-  +'</div><div><button class="btn sm" onclick="budEdit(\'\')">+ ตั้งงบ Cost Sheet ใหม่</button></div></div>';
+  +'<input class="s" style="min-width:240px" id="trnq" placeholder="ค้น Cost Sheet / Job / แผนก..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'</div><div><button class="btn green sm" onclick="budXlsx()">⬇ Excel</button> '
+  +'<button class="btn sm" onclick="budEdit(\'\')">+ ตั้งงบ Cost Sheet ใหม่</button></div></div>';
  h+='<div class="tbl-wrap"><table><thead><tr>'
   +['Cost Sheet','Job','แผนก','งบ (Budget)','ใช้จริง','คงเหลือ','ใช้ไป %','เที่ยว','หมายเหตุ',''].map(function(c,i){
      return '<th class="'+(i>=3&&i<=7?'num':'')+'">'+c+'</th>';}).join('')+'</tr></thead><tbody>';
@@ -1045,8 +1052,9 @@ function renderTRNraw(){
  var ic=ti('Ref. Cost Sheet No.');
  var bm=budMap(),um=trnByCS();
  var h='<div class="flex-between" style="margin:4px 0 8px"><div>'
-  +'<input class="s" style="min-width:280px" placeholder="ค้นทุกคอลัมน์..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'<input class="s" style="min-width:280px" id="trnq" placeholder="ค้นทุกคอลัมน์..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
   +'</div><div><button class="btn sm" onclick="trnAdd()">+ เพิ่มแถว</button> '
+  +'<button class="btn green sm" onclick="trnRawXlsx()">⬇ Excel</button> '
   +'<button class="btn ghost sm" onclick="trnCsv()">CSV</button></div></div>';
  h+='<div class="tbl-wrap"><table><thead><tr><th>แก้</th>'
   +H.map(function(c){return '<th class="'+(/Amount|VAT|Total/.test(c)?'num':'')+'">'+esc(TRN_TH[c]||c)+'</th>';}).join('')
@@ -1129,7 +1137,7 @@ function trnMsbcRows(){
 function renderTRNmsbc(){
  var L=trnMsbcRows();
  var h='<div class="flex-between" style="margin:4px 0 8px"><div>'
-  +'<input class="s" style="min-width:280px" placeholder="ค้น Cost Sheet / PO / Job..." value="'+esc(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
+  +'<input class="s" style="min-width:280px" id="trnq" placeholder="ค้น Cost Sheet / PO / Job..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()">'
   +'</div><div><button class="btn sm" onclick="trnCopy()">คัดลอกทั้งตาราง</button> '
   +'<button class="btn green sm" onclick="trnXlsx()">Excel</button></div></div>';
  h+='<div class="tbl-wrap"><table class="rep"><thead><tr>'
@@ -1165,7 +1173,13 @@ function renderTRN(){
  var _pre=trnUpBox()+trnQueueHtml();
  if(!TRN.head||!TRN.head.length)TRN.head=TRN_HEAD.slice();
  if(!BUD.head||!BUD.head.length)BUD.head=BUD_HEAD.slice();
- el.innerHTML = _pre + (trnPage===0?renderTRNmon() : trnPage===1?renderTRNraw() : renderTRNmsbc());}
+ // ⚠️ ช่องค้นหาอยู่ใน HTML ก้อนที่ถูกวาดใหม่ทุกครั้ง → พิมพ์ 1 ตัวแล้วโฟกัสหลุด
+ //    จำตำแหน่งเคอร์เซอร์ไว้ก่อน แล้วคืนให้หลังวาดเสร็จ (แบบเดียวกับ focusQ ของหน้าหลัก)
+ var _a=document.activeElement, _keep=!!(_a&&_a.id==='trnq'), _p=0, _q=0;
+ if(_keep){try{_p=_a.selectionStart;_q=_a.selectionEnd;}catch(e){}}
+ el.innerHTML = _pre + (trnPage===0?renderTRNmon() : trnPage===1?renderTRNraw() : renderTRNmsbc());
+ if(_keep){var _n=document.getElementById('trnq');
+   if(_n){_n.focus();try{_n.setSelectionRange(_p,_q);}catch(e){}}}}
 
 
 /* ============================================================================
@@ -1220,12 +1234,46 @@ function trnDate(s){
   if (d>31 || mo>12 || mo<1) return '';
   return y+'-'+('0'+mo).slice(-2)+'-'+('0'+d).slice(-2);
 }
-var TRN_REF_RE = /([A-Z]{1,4}\d{5,8})\/([A-Za-z0-9]{3,12})\/([A-Za-z0-9]{3,12})\/([A-Z]{0,4})\/?([\d,]+(?:\.\d+)?)\/([^\/]{1,40}?)(?=[A-Z]{1,4}\d{5,8}\/|$)/g;
+/* ---- 1 บรรทัดอ้างอิง = PO / Job / CostSheet / Dept / จำนวนเงิน / ลูกค้า ----
+ * แยกด้วย "/" แล้วอ่านทีละช่อง ทนกว่า regex ยาว ๆ รับได้ทุกแบบที่เจอจริง:
+ *   .../CSP260509/VP  ⏎ 5000/Thai Oil     (ตก / ตอนขึ้นบรรทัด)
+ *   .../CSP260330/    ⏎ VP4500/Thai Oil   (Dept ติดกับจำนวนเงิน)
+ *   .../CSP260607/    ⏎ 1500 / PTT GC REF (ไม่มี Dept)
+ *   POPI260030,POPI260031/...             (2 PO ในบรรทัดเดียว)
+ *   .../VP/2,000/B. Grimm Power           (จำนวนเงินมีลูกน้ำ · มีข้อความต่อท้าย)
+ */
+function trnRefOne(s){
+  var p = String(s||'').split('/');
+  if (p.length < 4) return null;
+  if (!/^[A-Z]{1,4}\d{5,9}(,[A-Z]{1,4}\d{5,9})*$/.test(p[0])) return null;
+  if (!/^[A-Za-z0-9\-]{3,12}$/.test(p[1])) return null;
+  var dept='', cs='', amt=null, i=3, m;
+  /* แบบไม่มี Cost Sheet: PO / Job / Dept / จำนวนเงิน / ลูกค้า  (เช่นของเข้าสต็อก Z-Stock) */
+  if (/^[A-Z]{2,4}$/.test(p[2]) && p.length>3 && /^[\d,]+(?:\.\d+)?$/.test(p[3])) {
+    return { PO:p[0], Job:p[1], CS:'', Dept:p[2], Amount:trnNum(p[3]), Cust:p.slice(4).join('/').slice(0,40) };
+  }
+  if (!/^[A-Za-z0-9\-]{3,12}$/.test(p[2])) return null;
+  cs = p[2];
+  if (/^[A-Z]{1,4}$/.test(p[3])) { dept = p[3]; i = 4; }
+  else if ((m = String(p[3]).match(/^([A-Z]{1,4})([\d,]+(?:\.\d+)?)$/))) { dept = m[1]; amt = trnNum(m[2]); i = 4; }
+  if (amt == null && i < p.length && /^[\d,]+(?:\.\d+)?$/.test(p[i])) { amt = trnNum(p[i]); i++; }
+  return { PO:p[0], Job:p[1], CS:cs, Dept:dept, Amount:amt, Cust:p.slice(i).join('/').slice(0,40) };
+}
 function trnRefs(block){
-  var g = String(block||'').replace(/\s+/g,''), out=[], m;
-  TRN_REF_RE.lastIndex = 0;
-  while ((m = TRN_REF_RE.exec(g)) !== null)
-    out.push({ PO:m[1], Job:m[2], CS:m[3], Dept:m[4]||'', Amount:trnNum(m[5]), Cust:String(m[6]||'').trim() });
+  var L = String(block||'').split('\n').map(function(x){
+      return x.replace(/\s+/g,'').replace(/^(เลขPO|อ้างอิง|อ้างอง)+:?/,'').replace(/^(เลขPO|อ้างอิง)+:?/,'');
+    }).filter(Boolean);
+  var out = [], partial = [];
+  for (var i=0;i<L.length;i++){
+    var r = trnRefOne(L[i]);
+    if ((!r || r.Amount==null) && i+1 < L.length) {
+      var j = trnRefOne(L[i] + L[i+1]);
+      if (j && j.Amount != null) { r = j; i++; }
+    }
+    if (!r) continue;
+    if (r.Amount == null) partial.push(r); else out.push(r);
+  }
+  if (!out.length && partial.length === 1) { partial[0]._noAmt = true; out.push(partial[0]); }
   return out;
 }
 function trnRefBlock(lines){
@@ -1250,6 +1298,19 @@ function trnDest(lines, mainRe){
   }
   return out.join(' / ');
 }
+function trnDestPTD(lines){
+  var out = [], on = false;
+  for (var i=0;i<lines.length;i++){
+    var L = lines[i];
+    if (/ประเภทรถ|ประกันภัย|ค่าแรงงาน|ค่าขนส่ง/.test(L)) break;
+    if (/จัดส่งสินค้า/.test(L)) { on = true; out.push(L.replace(/^.*จัดส่งสินค้า\S*\s*:?\s*/,'')); continue; }
+    if (on) out.push(L);
+  }
+  return out.map(function(x){
+      var v = trnClean(String(x).replace(/[\u0400-\u04FF]/g,''));
+      return v.replace(/^สถานที[^:]{0,30}:\s*/,'').replace(/^จุดที\s*\d\s*\.?\s*:?\s*/,'').trim();
+    }).filter(Boolean).join(' / ');
+}
 function trnMoneyNear(lines, labelRe){
   var MON = /([\d,]+\.\d\d)/;
   for (var i=0;i<lines.length;i++){
@@ -1260,7 +1321,7 @@ function trnMoneyNear(lines, labelRe){
   }
   return null;
 }
-function trnClean(s){ return String(s||'').replace(/^[^\wก-๙(]+/,'').replace(/\s+/g,' ').trim(); }
+function trnClean(s){ return String(s||'').replace(/[\u0400-\u04FF]/g,'').replace(/^[^\wก-๙(]+/,'').replace(/\s+/g,' ').trim(); }
 
 function trnParse(lines, fileName){
   var t = lines.join('\n');
@@ -1288,7 +1349,7 @@ function trnParse(lines, fileName){
     o.ddate = trnDate(g(/วันที.ส่งสินค\s*.า[^\d]*(\d{2}-\d{2}-\d{2})/)) || o.qdate;
     o.veh   = g(/ประเภทรถ\s+(.+)/);
     o.from  = trnClean(g(/สถานที.รับสินค\s*.า\s+(.+)/));
-    o.to    = trnDest(lines, /สถานที.ส่งจุดที\s*\d\.?\s*:\s*(.+)/);
+    o.to    = trnDestPTD(lines);
   }
   o.net   = trnMoneyNear(lines, /Totel/);
   o.vat   = trnMoneyNear(lines, /\(\s*Vat\s*\)|Vat\s*\)\s*7/);
@@ -1300,7 +1361,15 @@ function trnParse(lines, fileName){
   }
   if (o.gross == null && o.net != null) o.gross = trnR2(o.net + (o.vat||0));
 
+  var own = t.match(/บริษัท\s*([^\n]{0,40})/);
+  if (/PD\s*FLOWTECH|พีดี\s*โฟลเทค/i.test(t) && !/OSA/i.test(t.slice(0, t.indexOf('ประเภทสินค้า')>0?t.indexOf('ประเภทสินค้า'):600)))
+    o.warn.push('ใบนี้ออกให้ PD FLOWTECH ไม่ใช่ OSA — ควรลงในแอพ PD FLOWTECH');
   o.refs    = trnRefs(trnRefBlock(lines));
+  if (o.refs.length === 1 && o.refs[0].Amount == null && o.net != null) {
+    o.refs[0].Amount = o.net;
+    o.warn.push('ใบไม่ได้เขียนจำนวนเงินในบรรทัดอ้างอิง — ใส่ยอดรวมทั้งใบให้แทน ('+fmt2(o.net)+') โปรดยืนยัน');
+  }
+  o.refs = o.refs.filter(function(r){ return r.Amount != null; });
   var sum   = o.refs.reduce(function(a,r){ return a+(r.Amount||0); }, 0);
   o.sumRefs = trnR2(sum);
   o.checkSum = (o.net!=null && o.refs.length>0 && Math.abs(sum-o.net)<0.01);
@@ -1332,7 +1401,10 @@ function trnJMIndex(){
 }
 function trnCheckRef(r){
   var jm = trnJMIndex(); if (!jm) return { note:'', fix:null };
-  var L = jm[r.PO];
+  var L = null, cands = String(r.PO).split(',').filter(function(po){ return jm[po]; });
+  cands.some(function(po){ return jm[po].some(function(t){
+      if (t.job===r.Job || t.cs===r.CS) { L = jm[po]; return true; } return false; }); });
+  if (!L && cands.length) L = jm[cands[0]];
   if (!L) {                                   // PO ไม่มีเลย -> หา PO ที่ Job+CS ตรง
     var hit = null;
     Object.keys(jm).some(function(po){
@@ -1505,6 +1577,133 @@ function trnQueueHtml(){
     }
     return head + body + '</div>';
   }).join('');
+}
+
+// ============================================================================
+//  ⬇ Excel — แถบ "ค่าขนส่งในประเทศ" หน้า 1 (งบราย Cost Sheet) และหน้า 2 (Raw data)
+//  เพิ่ม 9 ก.ย. 69 · ใช้ ExcelJS ตัวเดียวกับปุ่ม Excel ที่มีอยู่แล้ว (loadX())
+//
+//  หลักการเดียวกับปุ่ม Excel เดิมทั้งแอพ: "เห็นอะไรได้อันนั้น"
+//    - ออกตามตัวกรองค้นหา (trnQ) ที่กรองอยู่ตรงหน้า ไม่ใช่ทั้งชีต
+//    - ลำดับ/ชื่อคอลัมน์ตรงกับตารางบนจอเป๊ะ
+//    - สีแดง = เกินงบ · ส้ม = ใช้ไปเกิน 90%  ติดไปในไฟล์ด้วย
+// ============================================================================
+
+// ---- ตัวช่วยกลาง: เขียนชีต + ใส่สไตล์ให้เหมือนปุ่ม Excel เดิม ----
+//  head    : ['ชื่อคอลัมน์', ...]
+//  rows    : [[ค่า, ...], ...]
+//  numCol  : function(i) -> true ถ้าคอลัมน์ที่ i เป็นตัวเลข (จัดชิดขวา + #,##0.00)
+//  rowTint : function(rowIdx) -> 'FFxxxxxx' หรือ null (สีตัวอักษรทั้งแถว)
+//  intCol  : function(i) -> true ถ้าเป็นจำนวนเต็ม (ไม่ต้องมีทศนิยม)
+async function trnXlSheet_(fname, sheetName, head, rows, numCol, rowTint, intCol) {
+  if (!rows.length) { alert('ไม่มีข้อมูลให้ออก Excel'); return; }
+  try { await loadX(); } catch (e) { alert('โหลดไลบรารี Excel ไม่ได้ — เช็คอินเทอร์เน็ต'); return; }
+  var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(sheetName);
+  ws.columns = head.map(function (h) {
+    return { header: h, width: Math.min(38, Math.max(11, String(h).length + 5)) };
+  });
+  ws.getRow(1).eachCell(function (c) {
+    c.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5496' } };
+    c.alignment = { horizontal: 'center', wrapText: true };
+  });
+  rows.forEach(function (r) { ws.addRow(r); });
+  ws.eachRow(function (row, n) {
+    if (n === 1) return;
+    var tint = rowTint ? rowTint(n - 2) : null;              // n-2 = ดัชนีแถวข้อมูล
+    if (n % 2 === 0) row.eachCell(function (c) {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+    });
+    row.eachCell(function (c, col) {
+      c.font = { name: 'Arial', size: 10, color: tint ? { argb: tint } : undefined,
+                 bold: tint ? true : false };
+      if (numCol && numCol(col - 1)) {
+        c.numFmt = (intCol && intCol(col - 1)) ? '#,##0' : '#,##0.00';
+        c.alignment = { horizontal: 'right' };
+      }
+    });
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: head.length } };
+  var buf = await wb.xlsx.writeBuffer();
+  var b = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var a = document.createElement('a');
+  a.href = window.URL.createObjectURL(b);
+  a.download = fname + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  a.click();
+}
+
+// ---- หน้า 1 — งบราย Cost Sheet ----
+// คอลัมน์ตรงตาราง + แถวสรุปรวมท้ายไฟล์ (เว้น 1 บรรทัดก่อน เพื่อไม่ให้ปนกับข้อมูล)
+async function budXlsx() {
+  var R = csRows(), q = trnQ.trim().toLowerCase();
+  if (q) R = R.filter(function (x) {
+    return (x.cs + ' ' + x.job + ' ' + x.dept + ' ' + x.note).toLowerCase().indexOf(q) >= 0;
+  });
+  var head = ['Cost Sheet', 'Job', 'แผนก', 'งบ (Budget)', 'ใช้จริง', 'คงเหลือ', 'ใช้ไป %', 'เที่ยว', 'หมายเหตุ'];
+  var rows = R.map(function (x) {
+    var pct = (x.budget ? Math.round(x.used * 100 / x.budget) : null);
+    return [x.cs, x.job, x.dept,
+            x.budget == null ? 'ยังไม่ตั้ง' : x.budget,   // คงคำว่า "ยังไม่ตั้ง" ไว้ ไม่ใส่ 0 ให้เข้าใจผิด
+            x.used,
+            x.remain == null ? '-' : x.remain,
+            pct == null ? '-' : pct,
+            x.n, x.note];
+  });
+  // สีตัวอักษรตามสถานะ — ตรงกับที่เห็นบนจอ
+  var tint = R.map(function (x) {
+    var pct = (x.budget ? Math.round(x.used * 100 / x.budget) : null);
+    if (x.remain == null) return null;
+    if (x.remain < 0) return 'FFC0392B';      // แดง = เกินงบ
+    if (pct >= 90)    return 'FFB7791F';      // ส้ม = ใช้ไปเกิน 90%
+    return null;
+  });
+  var tb = R.reduce(function (a, x) { return a + (x.budget || 0); }, 0);
+  var tu = R.reduce(function (a, x) { return a + x.used; }, 0);
+  var tn = R.reduce(function (a, x) { return a + x.n; }, 0);
+  rows.push([]);
+  rows.push(['รวม ' + R.length + ' Cost Sheet', '', '', tb, tu, r2(tb - tu), '', tn,
+             'เกินงบ ' + R.filter(function (x) { return x.remain != null && x.remain < 0; }).length +
+             ' · ยังไม่ตั้งงบ ' + R.filter(function (x) { return x.budget == null; }).length]);
+  tint.push(null); tint.push('FF1F3864');
+  await trnXlSheet_('งบขนส่งราย_CostSheet', 'งบราย Cost Sheet', head, rows,
+    function (i) { return i >= 3 && i <= 7; },
+    function (i) { return tint[i] || null; },
+    function (i) { return i === 6 || i === 7; });          // % และ เที่ยว = จำนวนเต็ม
+}
+
+// ---- หน้า 2 — Raw data (ใบเสนอราคารายบรรทัด) ----
+// หัวตารางภาษาไทยตาม TRN_TH เหมือนบนจอ + 2 คอลัมน์ท้าย งบ/คงเหลือ
+async function trnRawXlsx() {
+  var H = trnH(), q = trnQ.trim().toLowerCase();
+  var rows0 = TRN.rows.filter(function (r) {
+    return !q || r.join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+  var ic = ti('Ref. Cost Sheet No.'), bm = budMap(), um = trnByCS();
+  var head = H.map(function (c) { return TRN_TH[c] || c; }).concat(['งบ', 'คงเหลือ']);
+  var isNumH = H.map(function (c) { return /Amount|VAT|Total/.test(c); }).concat([true, true]);
+  var tint = [];
+  var rows = rows0.map(function (r) {
+    var cs = String(r[ic] || '').trim(), bg = bm[cs] ? bm[cs].budget : null;
+    var rem = (bg == null ? null : r2(bg - ((um[cs] && um[cs].used) || 0)));
+    tint.push(rem != null && rem < 0 ? 'FFC0392B' : null);
+    return H.map(function (c, i) {
+      var v = r[i] == null ? '' : r[i];
+      return isNumH[i] ? (v === '' ? '' : n2(v)) : String(v);
+    }).concat([bg == null ? 'ยังไม่ตั้ง' : bg, rem == null ? '-' : rem]);
+  });
+  var tot = rows0.reduce(function (a, r) { return a + n2(r[ti('Total')]); }, 0);
+  var amt = rows0.reduce(function (a, r) { return a + n2(r[ti('Amount')]); }, 0);
+  var vat = rows0.reduce(function (a, r) { return a + n2(r[ti('VAT')]); }, 0);
+  var blank = head.map(function () { return ''; });
+  rows.push(blank.slice()); tint.push(null);
+  var sum = blank.slice();
+  sum[0] = 'รวม ' + rows0.length + ' บรรทัด';
+  sum[H.indexOf('Amount')] = amt; sum[H.indexOf('VAT')] = vat; sum[H.indexOf('Total')] = tot;
+  rows.push(sum); tint.push('FF1F3864');
+  await trnXlSheet_('ขนส่งในประเทศ_Raw', 'Raw data', head, rows,
+    function (i) { return !!isNumH[i]; },
+    function (i) { return tint[i] || null; }, null);
 }
 
 </script>
