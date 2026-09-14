@@ -1145,7 +1145,9 @@ function renderTRNmsbc(){
   +'</tr></thead><tbody>';
  h+=L.map(function(a){return '<tr>'+a.map(function(v,i){
    return '<td class="'+(trnMsbcNum(i)?'num':'')+'">'
-     +esc(typeof v==='number'&&/Cost|Amount|Remaining/.test(TRN_MSBC[i])?fmt2(v):v)+'</td>';}).join('')+'</tr>';}).join('');
+     // ⚠️ "Ref. Cost Sheet Line No." มีคำว่า Cost อยู่ในชื่อ แต่เป็น "เลขบรรทัด" ไม่ใช่จำนวนเงิน
+     //    ถ้าไม่กันไว้จะโชว์ 30,000.00 ทำให้เข้าใจผิดว่าเป็นเงินสามหมื่น (ทีมบัญชีทักมา 14 ก.ย. 69)
+     +esc(typeof v==='number'&&/Cost|Amount|Remaining/.test(TRN_MSBC[i])&&!/Line No\./.test(TRN_MSBC[i])?fmt2(v):v)+'</td>';}).join('')+'</tr>';}).join('');
  h+='</tbody></table></div>';
  var tot=L.reduce(function(a,x){return a+n2(x[12]);},0);
  h+='<div class="note info" style="margin-top:12px">'+L.length+' บรรทัด &middot; รวม '+fmt2(tot)
