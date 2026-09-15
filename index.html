@@ -1131,7 +1131,11 @@ function trnMsbcNum(i){return /Cost|Amount|Quantity|Row No|Remaining|Discount %|
 //    ⚠️ ตอนนี้ 2 แถบใช้โครงบรรทัดเดียวกัน ต่างแค่ช่อง VAT Prod. Posting Group
 //       ผู้ใช้แจ้งว่า template จริงของ 2 แบบไม่เหมือนกัน — รอไฟล์ template แล้วค่อยแยกโครง
 var trnVat='gvat';          // แถบที่เลือกอยู่: 'gvat' | 'novat'
-var trnJob='ALL';           // ตัวกรอง Job — เลือกทีละ Job เพื่อคัดลอกลง BC ให้ตรงงาน
+// ⭐ ตัวกรอง Job — เลือกได้หลาย Job พร้อมกัน (15 ก.ย. 69) · [] ว่าง = ทั้งหมด
+//    เดิมเป็นสตริงเดียว 'ALL' | ชื่อ Job — เปลี่ยนเป็น array เพื่อคัดลอกหลายงานรวดเดียว
+var trnJobs=[];
+// แถวที่ไม่มี Job ต้องมีชื่อเรียกที่คงที่ ไม่งั้นตัวกรองกับรายการใน dropdown จะไม่ตรงกัน
+function trnJobKey(v){return String(v==null?'':v)||'(ไม่ระบุ)';}
 function trnMsbcBase(){     // แถวดิบหลังกรองด้วยคำค้น + แถบ VAT (ยังไม่กรอง Job)
  var q=trnQ.trim().toLowerCase(), iVat=ti('VAT');
  return TRN.rows.filter(function(r){
@@ -1141,7 +1145,8 @@ function trnMsbcBase(){     // แถวดิบหลังกรองด้�
 function trnMsbcRows(){
  var iPo=ti('PO'),iJob=ti('Job No. Code'),iCs=ti('Ref. Cost Sheet No.'),iDp=ti('Department'),
      iAm=ti('Amount'),iVd=ti('Vendor');
- var rows=trnMsbcBase().filter(function(r){return trnJob==='ALL'||String(r[iJob]||'')===trnJob;});
+ var rows=trnMsbcBase().filter(function(r){
+   return !trnJobs.length || trnJobs.indexOf(trnJobKey(r[iJob]))>=0;});
  var isVat=(trnVat==='gvat');            // แถบ "VAT" = ใบที่คิด VAT
  var L=rows.map(function(r,n){
   var amt=r2(n2(r[iAm])), cs=String(r[iCs]||'').trim(), rem=remainOf(cs);
@@ -1152,28 +1157,37 @@ function trnMsbcRows(){
   return [n+1,'',0,'','Item','Z-TRANSPORT','','','LOCAL TRANSPORT - '+(r[iPo]||''),'',1,'UNIT',amt,0,amt,'',
    '5112006','NOVAT',(isVat?'SERVICE':'TRANSPORT'),'',cs,40000,(rem==null?'':rem),(r[iDp]||'VP'),(r[iJob]||''),
    'Z-TRANSPORT','Z-OTHERS','','','','','','','','',''];});
- // ── แถบ VAT: ต่อท้ายด้วยคู่ INPUT VAT แยกตามบริษัทขนส่ง (1 บริษัท = 1 คู่) ──
- //    ฐาน = ผลรวมค่าขนส่งก่อน VAT ของบริษัทนั้นในหน้าที่กรองอยู่ · MSBC คิด VAT 7% เองจาก SVAT
- //    คู่ +1 (SVAT) / −1 (NOVAT) · Dept + Job ใช้ของบรรทัดแรกของบริษัทนั้น (ตาม =Y2 ในเทมเพลต)
+ // ── แถบ VAT: ต่อท้ายด้วยคู่ INPUT VAT แยกตาม "บริษัทขนส่ง + Job" (1 คู่ต่อกลุ่ม) ──
+ //    ฐาน = ผลรวมค่าขนส่งก่อน VAT ของกลุ่มนั้นในหน้าที่กรองอยู่ · MSBC คิด VAT 7% เองจาก SVAT
+ //    คู่ +1 (SVAT) / −1 (NOVAT)
+ //    ⚠️ เดิมจัดกลุ่มด้วย "บริษัท" อย่างเดียว (14 ก.ย. 69) พอเลือกได้หลาย Job แล้วบริษัทเดียว
+ //       อยู่คนละ Job ภาษีซื้อทั้งก้อนจะไปเกาะ Job ของบรรทัดแรก ทั้งที่ฐานมาจากหลาย Job
+ //       → เพิ่ม Job เข้าไปในคีย์ (15 ก.ย. 69) ยอดรวมเท่าเดิม แต่ลง Job ถูกทุกบรรทัด
+ //       ถ้าเลือก Job เดียว (การใช้งานปกติ) กลุ่มจะเหมือนเดิมเป๊ะ ผลลัพธ์ไม่เปลี่ยน
  if(isVat&&rows.length){
   var byV={},vOrder=[];
-  rows.forEach(function(r){var v=String(r[iVd]||'');if(!byV[v]){byV[v]=[];vOrder.push(v);}byV[v].push(r);});
-  vOrder.forEach(function(v){
-   var rs=byV[v], base=r2(rs.reduce(function(a,r){return a+n2(r[iAm]);},0));
+  rows.forEach(function(r){
+    var k=JSON.stringify([String(r[iVd]||''),trnJobKey(r[iJob])]);
+    if(!byV[k]){byV[k]=[];vOrder.push(k);}byV[k].push(r);});
+  vOrder.forEach(function(k){
+   var rs=byV[k], base=r2(rs.reduce(function(a,r){return a+n2(r[iAm]);},0));
    if(base<=0)return;
-   var dp=rs[0][iDp]||'VP', jb=rs[0][iJob]||'';
+   var v=String(rs[0][iVd]||''), dp=rs[0][iDp]||'VP', jb=rs[0][iJob]||'';
    [[1,'SVAT'],[-1,'NOVAT']].forEach(function(q){
     L.push([L.length+1,'',0,'','G/L Account','1160002','','INPUT VAT',v,'',q[0],'',base,0,r2(base*q[0]),'',
       'GL',q[1],'NOWHT','','','','',dp,jb,'','','','','','','','','','','']);});});
  }
  return L;}
-function trnSetVat(v){trnVat=v;trnJob='ALL';renderTRN();}   // เปลี่ยนแถบแล้วรีเซ็ต Job (Job คนละชุดกัน)
+function trnSetVat(v){trnVat=v;trnJobs=[];renderTRN();}   // เปลี่ยนแถบแล้วล้าง Job (Job คนละชุดกัน)
+function trnJobAdd(v){if(v&&trnJobs.indexOf(v)<0)trnJobs.push(v);renderTRN();}
+function trnJobDel(i){trnJobs.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่ชื่อ Job — กันชื่อที่มีอัญประกาศทำ onclick พัง
+function trnJobClear(){trnJobs=[];renderTRN();}
 function renderTRNmsbc(){
  var iJob=ti('Job No. Code');
  var base=trnMsbcBase();
- // รายชื่อ Job ในแถบนี้ + จำนวนบรรทัด (ถ้าเลือก Job ที่ไม่มีในแถบใหม่ ให้ตกกลับเป็นทั้งหมด)
- var jc={}; base.forEach(function(r){var j=String(r[iJob]||'(ไม่ระบุ)');jc[j]=(jc[j]||0)+1;});
- if(trnJob!=='ALL'&&!jc[trnJob])trnJob='ALL';
+ // รายชื่อ Job ในแถบนี้ + จำนวนบรรทัด (Job ที่เลือกไว้แต่ไม่มีในแถบ/คำค้นใหม่ ให้ตัดทิ้ง)
+ var jc={}; base.forEach(function(r){var j=trnJobKey(r[iJob]);jc[j]=(jc[j]||0)+1;});
+ trnJobs=trnJobs.filter(function(j){return jc[j];});
  var L=trnMsbcRows();
  var h='<div style="margin:4px 0 10px">'
   +'<span class="pill'+(trnVat==='gvat'?' on':'')+'" onclick="trnSetVat(\'gvat\')">VAT — ใบที่คิด VAT</span> '
@@ -1181,12 +1195,24 @@ function renderTRNmsbc(){
   +'</div>';
  h+='<div class="flex-between" style="margin:4px 0 8px"><div>'
   +'<input class="s" style="min-width:250px" id="trnq" placeholder="ค้น Cost Sheet / PO / Job..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()"> '
-  +'Job: <select class="s" onchange="trnJob=this.value;renderTRN()"><option value="ALL">ทั้งหมด ('+base.length+' บรรทัด)</option>'
-  +Object.keys(jc).sort().map(function(j){
-     return '<option value="'+escA(j)+'"'+(trnJob===j?' selected':'')+'>'+esc(j)+' ('+jc[j]+')</option>';}).join('')
+  // เลือกจาก dropdown = "เพิ่ม" เข้ากอง ไม่ใช่แทนที่ · Job ที่เลือกแล้วจะหายจากรายการ
+  +'Job: <select class="s" onchange="trnJobAdd(this.value)"><option value="">'
+  +(trnJobs.length?'+ เพิ่ม Job...':'ทั้งหมด ('+base.length+' บรรทัด)')+'</option>'
+  +Object.keys(jc).sort().filter(function(j){return trnJobs.indexOf(j)<0;}).map(function(j){
+     return '<option value="'+escA(j)+'">'+esc(j)+' ('+jc[j]+')</option>';}).join('')
   +'</select>'
   +'</div><div><button class="btn sm" onclick="trnCopy()">คัดลอกทั้งตาราง</button> '
   +'<button class="btn green sm" onclick="trnXlsx()">Excel</button></div></div>';
+ // ── ป้ายชิป Job ที่เลือกอยู่ · กด × เอาออกทีละอัน ──
+ if(trnJobs.length) h+='<div style="margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+  +trnJobs.map(function(j,i){
+     return '<span style="display:inline-flex;align-items:center;gap:6px;background:#e8f0fe;color:#1a3a6b;'
+       +'border:1px solid #b6cdf5;border-radius:999px;padding:3px 6px 3px 11px;font-size:13px;font-weight:600">'
+       +esc(j)+' <span style="opacity:.65;font-weight:400">('+jc[j]+')</span>'
+       +'<b onclick="trnJobDel('+i+')" title="เอาออก" style="cursor:pointer;background:#c9dbf8;color:#1a3a6b;'
+       +'border-radius:999px;width:17px;height:17px;line-height:17px;text-align:center;font-size:12px">&times;</b></span>';}).join('')
+  +'<span onclick="trnJobClear()" style="cursor:pointer;color:#8a94a6;font-size:13px;text-decoration:underline;margin-left:2px">ล้างทั้งหมด</span>'
+  +'</div>';
  h+='<div class="tbl-wrap"><table class="rep"><thead><tr>'
   +TRN_MSBC.map(function(c,i){return '<th class="'+(trnMsbcNum(i)?'num':'')+'">'+esc(c)+'</th>';}).join('')
   +'</tr></thead><tbody>';
@@ -1199,9 +1225,9 @@ function renderTRNmsbc(){
  var tot=L.reduce(function(a,x){return a+n2(x[12]);},0);
  h+='<div class="note info" style="margin-top:12px">'+L.length+' บรรทัด &middot; รวม '+fmt2(tot)
   +' &#3647; &middot; แถบ <b>'+(trnVat==='gvat'?'VAT':'NOVAT')+'</b>'
-  +(trnJob==='ALL'?'':' &middot; Job <b>'+esc(trnJob)+'</b>')
+  +(trnJobs.length?' &middot; Job <b>'+trnJobs.map(esc).join(', ')+'</b>':'')
   +' &middot; WHT = <b>'+(trnVat==='gvat'?'SERVICE':'TRANSPORT')+'</b>'
-  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง':'')
+  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง + Job':'')
   +' &middot; ตรงตาม Template #Transport &middot; ปุ่ม 📋 คัดลอก / Excel ได้เฉพาะที่กรองอยู่ตรงหน้า</div>';
  return h;}
 function trnCopy(){
