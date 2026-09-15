@@ -1149,25 +1149,28 @@ function trnMsbcRows(){
    return !trnJobs.length || trnJobs.indexOf(trnJobKey(r[iJob]))>=0;});
  var isVat=(trnVat==='gvat');            // แถบ "VAT" = ใบที่คิด VAT
  var L=rows.map(function(r,n){
-  var amt=r2(n2(r[iAm])), cs=String(r[iCs]||'').trim(), rem=remainOf(cs);
+  var amt=r2(n2(r[iAm])), cs=String(r[iCs]||'').trim();
   // ⚠️ ตรงตาม Template #Transport (14 ก.ย. 69):
   //    VAT Prod. Posting Group = NOVAT ทั้ง 2 แถบ (ไม่ใช่ GVAT)
   //    WHT Product Posting Group = TRANSPORT (แถบ NOVAT) / SERVICE (แถบ VAT)
   //    ช่อง Remark เว้นว่าง — หมายเหตุยังอยู่ในชีต Raw data เหมือนเดิม
+  //    ช่อง Cost Sheet Remaining Amount เว้นว่างด้วย (ผู้ใช้สั่ง 15 ก.ย. 69) — คงคอลัมน์ไว้
+  //    ยอดคงเหลือยังดูได้ที่หน้า "มอนิเตอร์" กับ "Raw data" เหมือนเดิม
   return [n+1,'',0,'','Item','Z-TRANSPORT','','','LOCAL TRANSPORT - '+(r[iPo]||''),'',1,'UNIT',amt,0,amt,'',
-   '5112006','NOVAT',(isVat?'SERVICE':'TRANSPORT'),'',cs,40000,(rem==null?'':rem),(r[iDp]||'VP'),(r[iJob]||''),
+   '5112006','NOVAT',(isVat?'SERVICE':'TRANSPORT'),'',cs,40000,'',(r[iDp]||'VP'),(r[iJob]||''),
    'Z-TRANSPORT','Z-OTHERS','','','','','','','','',''];});
- // ── แถบ VAT: ต่อท้ายด้วยคู่ INPUT VAT แยกตาม "บริษัทขนส่ง + Job" (1 คู่ต่อกลุ่ม) ──
- //    ฐาน = ผลรวมค่าขนส่งก่อน VAT ของกลุ่มนั้นในหน้าที่กรองอยู่ · MSBC คิด VAT 7% เองจาก SVAT
- //    คู่ +1 (SVAT) / −1 (NOVAT)
- //    ⚠️ เดิมจัดกลุ่มด้วย "บริษัท" อย่างเดียว (14 ก.ย. 69) พอเลือกได้หลาย Job แล้วบริษัทเดียว
- //       อยู่คนละ Job ภาษีซื้อทั้งก้อนจะไปเกาะ Job ของบรรทัดแรก ทั้งที่ฐานมาจากหลาย Job
- //       → เพิ่ม Job เข้าไปในคีย์ (15 ก.ย. 69) ยอดรวมเท่าเดิม แต่ลง Job ถูกทุกบรรทัด
- //       ถ้าเลือก Job เดียว (การใช้งานปกติ) กลุ่มจะเหมือนเดิมเป๊ะ ผลลัพธ์ไม่เปลี่ยน
+ // ── แถบ VAT: ต่อท้ายด้วยคู่ INPUT VAT แยกตามบริษัทขนส่ง (1 บริษัท = 1 คู่) ──
+ //    ฐาน = ผลรวมค่าขนส่งก่อน VAT ของบริษัทนั้นในหน้าที่กรองอยู่ · MSBC คิด VAT 7% เองจาก SVAT
+ //    คู่ +1 (SVAT) / −1 (NOVAT) · Dept + Job ใช้ของบรรทัดแรกของบริษัทนั้น (ตาม =Y2 ในเทมเพลต)
+ //
+ //    ⛔ ห้ามเปลี่ยนไปจัดกลุ่มแบบ "บริษัท + Job" — เคยแก้ไปแล้วและผิด (15 ก.ย. 69)
+ //       เลือก 2 Job ของโชคอุดมทรัพย์ (1,500 + 1,500) แล้วได้คู่ INPUT VAT 2 คู่ คู่ละ 1,500
+ //       ผู้ใช้ยืนยันว่าต้องเป็น "คู่เดียว ฐาน 3,000" — รวมข้ามทุก Job ที่กรองอยู่ตรงหน้า
+ //       (เหตุผลที่เคยอ้างว่า "ภาษีซื้อควรเกาะ Job ให้ตรง" ใช้กับ MSBC ชุดนี้ไม่ได้)
  if(isVat&&rows.length){
   var byV={},vOrder=[];
   rows.forEach(function(r){
-    var k=JSON.stringify([String(r[iVd]||''),trnJobKey(r[iJob])]);
+    var k=String(r[iVd]||'');
     if(!byV[k]){byV[k]=[];vOrder.push(k);}byV[k].push(r);});
   vOrder.forEach(function(k){
    var rs=byV[k], base=r2(rs.reduce(function(a,r){return a+n2(r[iAm]);},0));
@@ -1227,7 +1230,7 @@ function renderTRNmsbc(){
   +' &#3647; &middot; แถบ <b>'+(trnVat==='gvat'?'VAT':'NOVAT')+'</b>'
   +(trnJobs.length?' &middot; Job <b>'+trnJobs.map(esc).join(', ')+'</b>':'')
   +' &middot; WHT = <b>'+(trnVat==='gvat'?'SERVICE':'TRANSPORT')+'</b>'
-  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง + Job':'')
+  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง (รวมทุก Job ที่เลือก)':'')
   +' &middot; ตรงตาม Template #Transport &middot; ปุ่ม 📋 คัดลอก / Excel ได้เฉพาะที่กรองอยู่ตรงหน้า</div>';
  return h;}
 function trnCopy(){
