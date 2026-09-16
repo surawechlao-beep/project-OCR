@@ -292,13 +292,55 @@ function fmtDate(v){if(v==null||v==='')return v;var s=String(v).trim(),a,d,m,y;
  return d+'-'+MON[m-1]+'-'+String(y).slice(-2);}
 const isDate=h=>{var s=String(h).trim();return s==='Date'||s==='วันที่'||s==='Upload Date'||s==='วันที่อัปโหลด';};
 
+// ── บันทึกเหตุที่ต่อไม่ติด (เก็บ 10 ครั้งล่าสุด) — เพิ่ม 16 ก.ย. 69 ───────────────
+// ⚠️ ก่อนหน้านี้แถบ "ออฟไลน์" โชว์แค่ "เชื่อม Google Drive ไม่ได้ตอนนี้" แล้วทิ้ง e.message
+//    ทำให้ไล่สาเหตุไม่ได้เลย ทั้งที่ asJson แยกสาเหตุไว้แล้ว 4 แบบ
+var NETLOG_KEY='osa_netlog';
+function netLog_(why){
+ try{
+   var a=JSON.parse(localStorage.getItem(NETLOG_KEY)||'[]');
+   a.unshift({t:new Date().toISOString(),why:String(why).slice(0,220)});
+   localStorage.setItem(NETLOG_KEY,JSON.stringify(a.slice(0,10)));
+ }catch(_){}
+}
+function netLogShow(){
+ var a=[];try{a=JSON.parse(localStorage.getItem(NETLOG_KEY)||'[]');}catch(_){}
+ if(!a.length){alert('ยังไม่มีบันทึกการต่อไม่ติด');return;}
+ alert('เหตุที่ต่อ Google ไม่ติด — 10 ครั้งล่าสุด\n\n'
+   +a.map(function(x){return new Date(x.t).toLocaleString('th-TH')+'\n   '+x.why;}).join('\n\n'));
+}
+
 // เรียก Apps Script แล้วแปลงเป็น JSON — ถ้าได้หน้า HTML กลับมา แปลว่า Google ไม่ได้รันสคริปต์
 // (ยังไม่ได้อนุญาตสิทธิ์ / deployment ไม่ใช่ Anyone / เวอร์ชันเก่า) — บอกสาเหตุจริงแทน error งงๆ
+//
+// ⭐ ยิงซ้ำ 1 ครั้งอัตโนมัติ (เพิ่ม 16 ก.ย. 69) — Apps Script คืนหน้า HTML ชั่วคราวตอน cold start
+//    ได้เป็นปกติ ของเดิมยิงครั้งเดียวแล้วตกโหมดออฟไลน์ทันที
+//    ปลอดภัยเพราะทุก action ที่ผ่าน asJson เป็นการ "อ่าน" หรือมีตัวกัน _fromNNN อยู่แล้ว
 async function asJson(url){
+ var last=null;
+ for(var attempt=0; attempt<2; attempt++){
+   if(attempt) await new Promise(function(s){setTimeout(s,1500);});
+   try{ return await asJsonOnce_(url); }
+   catch(e){ last=e; netLog_((attempt?'[ยิงซ้ำ] ':'[ครั้งแรก] ')+(e.message||e)); }
+ }
+ throw last;
+}
+async function asJsonOnce_(url){
  // กัน cache: เบราว์เซอร์/Google อาจเสิร์ฟคำตอบเก่าของ URL เดิม ทำให้เห็นข้อมูลย้อนกลับ
- url += (url.indexOf('?')<0?'?':'&')+'_='+Date.now();
- const r=await fetch(url,{redirect:'follow',cache:'no-store'});
- const t=await r.text();
+ var u = url + (url.indexOf('?')<0?'?':'&')+'_='+Date.now();
+ // ⭐ timeout 60 วิ — ของเดิมไม่มี ถ้า Google ค้างหน้าจอจะหมุนค้างไปเรื่อย ๆ ไม่มีวันจบ
+ var ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+ var tm  = ctl ? setTimeout(function(){ctl.abort();}, 60000) : null;
+ var t;
+ try{
+   var opt = {redirect:'follow',cache:'no-store'};
+   if(ctl) opt.signal = ctl.signal;
+   const r = await fetch(u,opt);
+   t = await r.text();
+ }catch(err){
+   if(err && err.name==='AbortError') throw new Error('หมดเวลารอ Google เกิน 60 วินาที (สคริปต์อาจกำลังโหลดข้อมูลก้อนใหญ่)');
+   throw new Error('ต่อ Google ไม่ได้ — '+((err&&err.message)||err));
+ }finally{ if(tm) clearTimeout(tm); }
  const head=t.slice(0,400);
  if(/^\s*</.test(t)){
    let why='Google ส่งหน้าเว็บกลับมาแทนข้อมูล';
@@ -337,10 +379,14 @@ async function loadDB(fresh){
      POJOBIDX=c.pojob||null;POJOB=null;
      renderInbox();render();
      document.getElementById('hb').innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
-     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+') • <a href="#" onclick="loadDB(1);return false">ลองโหลดใหม่</a>';
+     // ⚠️ ต้องโชว์ e.message เสมอ — ของเดิมกลืนเหตุผลทิ้ง ทำให้ไล่สาเหตุไม่ได้เลย (แก้ 16 ก.ย. 69)
+     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+')'
+       +'<br><b>เหตุ:</b> '+esc(e.message||e)+' <small>(ยิงซ้ำแล้ว 2 ครั้ง)</small>'
+       +' • <a href="#" onclick="loadDB(1);return false">ลองโหลดใหม่</a>'
+       +' • <a href="#" onclick="netLogShow();return false">ดูบันทึก 10 ครั้งล่าสุด</a>';
    }else{
      document.getElementById('stats').innerHTML='';
-     document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB(1)">ลองใหม่</button></td></tr></tbody>';
+     document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB(1)">ลองใหม่</button> <button class="btn sm" style="margin-top:10px" onclick="netLogShow()">ดูบันทึก 10 ครั้งล่าสุด</button></td></tr></tbody>';
      document.getElementById('hb').innerHTML='● เชื่อม Drive ไม่ได้';
    }
  }
