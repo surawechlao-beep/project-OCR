@@ -351,43 +351,97 @@ async function asJsonOnce_(url){
  }
  try{ return JSON.parse(t); }catch(_){ throw new Error('ข้อมูลที่ได้ไม่ใช่ JSON: '+head.slice(0,120)); }
 }
-// fresh=true → ส่ง &fresh=1 บอกฝั่ง Apps Script ให้ล้างแคชแล้วอ่านชีตของจริงใหม่ทั้งหมด
-// ใช้กับปุ่ม ↻ เท่านั้น · การโหลดหลังกดเซฟไม่ต้องใช้ เพราะฝั่งเซิร์ฟเวอร์ล้างแคชให้แล้วตอนเขียน
+// ============================================================================
+//  ⚡ แคชในเครื่อง (localStorage) — "โชว์ของเก่าก่อน แล้วอัปเดตเงียบ ๆ"
+// ============================================================================
+//  ปัญหา: Apps Script ต้องถูกปลุกก่อนทุกครั้ง (cold start 2-3 วิ) ลดไม่ได้
+//         แคชฝั่งเซิร์ฟเวอร์ช่วยตอน "อ่านชีต" แต่ช่วยตอน "ปลุกสคริปต์" ไม่ได้
+//  วิธี : เปิดหน้า -> วาดจากของที่เคยโหลดทันที (ไม่ขึ้นม่าน) -> ยิงขอของสดเบื้องหลัง -> วาดทับ
+//
+//  ⚠️ กติกาที่ห้ามแหก (ข้อมูลเป็นเงิน):
+//   1) INBOX ห้ามใช้ของเก่าเด็ดขาด — รายการไฟล์เปลี่ยนตลอด ต้องเป็น null จนของสดมาถึง
+//   2) ทุกคำสั่งเขียน (POST / import / patch / clearinbox) ต้องล้างแคชทิ้ง "ก่อน" ยิง
+//      เผื่อปิดหน้าก่อนโหลดใหม่เสร็จ จะได้ไม่เหลือตัวเลขเงินชุดเก่าไว้หลอกรอบหน้า
+//   3) Job Master ไม่เก็บ — ก้อน 2 MB เกินโควตา localStorage (กันไว้ตั้งแต่เดิม)
+var CKEY='osa_cache', CKEY_T='osa_cache_t';
+function cacheClear(){ try{ localStorage.removeItem(CKEY); localStorage.removeItem(CKEY_T); }catch(_){} }
+function cacheRead(){
+  try{ var c=JSON.parse(localStorage.getItem(CKEY)||'null');
+       return (c&&c.finance) ? {d:normDates(c), t:localStorage.getItem(CKEY_T)||''} : null;
+  }catch(_){ return null; }
+}
+function cacheWrite(d){
+  try{ var cc={}; for(var k in d) if(k!=='jobmaster') cc[k]=d[k];
+       localStorage.setItem(CKEY,JSON.stringify(cc));
+       localStorage.setItem(CKEY_T,new Date().toISOString());
+  }catch(_){ cacheClear(); }   // เต็มโควตา = ทิ้งไปเลย ดีกว่าเหลือครึ่ง ๆ กลาง ๆ
+}
+// วาดหน้าจอจากก้อนข้อมูล (ใช้ร่วมกันทั้งของเก่าและของสด)
+function paintDB(d,isFresh){
+  setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
+  buildFrtMap(d.freight); setTRN(d);
+  POJOBIDX=d.pojob||null; POJOB=null;
+  if(d.jobmaster&&d.jobmaster.length) JOBMASTER={head:d.jobmaster[0],rows:d.jobmaster.slice(1)};
+  INBOX = isFresh ? (d.inbox||[]) : null;   // ⚠️ ของเก่า = ไม่ทราบสถานะ Inbox
+  renderInbox(); render();
+}
+// ⚡ ดักทุกคำสั่งที่ "เขียน" แล้วล้างแคชทิ้งก่อน — ที่เดียว ครอบคลุมทุกปุ่ม
+(function(){
+  var _f=window.fetch;
+  window.fetch=function(u,o){
+    try{
+      var url=(typeof u==='string')?u:(u&&u.url)||'';
+      if(url.indexOf(URL_AS)===0){
+        var isPost=o&&String(o.method||'GET').toUpperCase()==='POST';
+        if(isPost||/[?&]action=(import|patch|clearinbox|cleanup)\b/.test(url)) cacheClear();
+      }
+    }catch(_){}
+    return _f.apply(this,arguments);
+  };
+})();
+
+// fresh=true → ข้ามแคชในเครื่อง + ส่ง &fresh=1 บอก Apps Script ให้อ่านชีตของจริงใหม่
+// ใช้กับปุ่ม ↻ เท่านั้น
 async function loadDB(fresh){
- const ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';
- ot.textContent=fresh?'⬇ ดึงข้อมูลสดจาก Google Drive...':'⬇ ดึงข้อมูลกลางจาก Google Drive...';
+ const ov=document.getElementById('ov'),ot=document.getElementById('ovt');
+ const hb=document.getElementById('hb'), note=document.getElementById('dbnote');
+ // --- 1) วาดของเก่าก่อน (ถ้ามี) เพื่อไม่ให้ต้องนั่งดูม่านหมุน ---
+ var cached = fresh ? null : cacheRead();
+ if(cached){
+   try{
+     paintDB(cached.d,false);
+     var ts=cached.t?new Date(cached.t).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'';
+     if(hb) hb.innerHTML='● ข้อมูล '+ts+' · กำลังอัปเดต…';
+     ov.style.display='none';
+   }catch(_){ cached=null; cacheClear(); }
+ }
+ if(!cached){ ov.style.display='flex'; ot.textContent=fresh?'⬇ ดึงข้อมูลสดจาก Google Drive...':'⬇ ดึงข้อมูลกลางจาก Google Drive...'; }
+ // --- 2) ยิงขอของสดเสมอ ---
  try{
    const d=normDates(await asJson(URL_AS+'?action=db'+(fresh?'&fresh=1':'')));
    if(!d||!d.finance) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
-   setDB({head:(d.finance[0]||[]),rows:d.finance.slice(1)},{head:(d.purchase[0]||[]),rows:d.purchase.slice(1)});
-   buildFrtMap(d.freight);INBOX=d.inbox||[];setTRN(d);
-   POJOBIDX=d.pojob||null;POJOB=null;   // ⚡ ดัชนีย่อ PO->Job/CS/Dept (แทน Job Master ทั้งก้อน)
-   if(d.jobmaster&&d.jobmaster.length)JOBMASTER={head:d.jobmaster[0],rows:d.jobmaster.slice(1)};   // (เผื่อ Apps Script เวอร์ชันเก่า)
-   // ไม่เก็บ Job Master ลง cache — ก้อนใหญ่ 2 MB ทำให้เบราว์เซอร์อืดและเกินโควตา
-   try{var cc={};for(var k in d)if(k!=='jobmaster')cc[k]=d[k];
-       localStorage.setItem('osa_cache',JSON.stringify(cc));localStorage.setItem('osa_cache_t',new Date().toISOString());}catch(_){}
-   ov.style.display='none';renderInbox();render();
-   document.getElementById('hb').innerHTML='● ข้อมูลกลาง — โหลดสำเร็จ';
+   paintDB(d,true);
+   cacheWrite(d);
+   ov.style.display='none';
+   if(hb) hb.innerHTML='● ข้อมูลกลาง — โหลดสำเร็จ';
+   if(note&&/กำลังอัปเดต|ข้อมูลล่าสุดที่โหลดได้/.test(note.innerHTML)) note.innerHTML='';
  }catch(e){
    ov.style.display='none';
    // สำรอง: ใช้ข้อมูลล่าสุดที่เคยโหลด (cache) ถ้ามี
-   let c=null,ct='';try{c=normDates(JSON.parse(localStorage.getItem('osa_cache')));ct=localStorage.getItem('osa_cache_t')||'';}catch(_){}
-   if(c&&c.finance){
-     setDB({head:(c.finance[0]||[]),rows:c.finance.slice(1)},{head:(c.purchase[0]||[]),rows:c.purchase.slice(1)});
-     buildFrtMap(c.freight);setTRN(c);
-     INBOX=null;   // ⚠️ ห้ามใช้รายการ Inbox เก่า — เป็นข้อมูลที่เปลี่ยนตลอด ถ้าโหลดไม่ได้ให้บอกว่า "ไม่ทราบ" ไม่ใช่โชว์ของเก่า
-     POJOBIDX=c.pojob||null;POJOB=null;
-     renderInbox();render();
-     document.getElementById('hb').innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
+   let c=cached; if(!c) c=cacheRead();
+   if(c&&c.d&&c.d.finance){
+     if(!cached) paintDB(c.d,false);   // ยังไม่เคยวาด -> วาดของเก่าให้ดูก่อน
+     else INBOX=null, renderInbox();
+     if(hb) hb.innerHTML='● ออฟไลน์ — ข้อมูลล่าสุดที่เคยโหลด';
      // ⚠️ ต้องโชว์ e.message เสมอ — ของเดิมกลืนเหตุผลทิ้ง ทำให้ไล่สาเหตุไม่ได้เลย (แก้ 16 ก.ย. 69)
-     document.getElementById('dbnote').innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(ct?new Date(ct).toLocaleString('th-TH'):'')+')'
+     note.innerHTML='⚠️ เชื่อม Google Drive ไม่ได้ตอนนี้ — แสดงข้อมูลล่าสุดที่โหลดได้ ('+(c.t?new Date(c.t).toLocaleString('th-TH'):'')+')'
        +'<br><b>เหตุ:</b> '+esc(e.message||e)+' <small>(ยิงซ้ำแล้ว 2 ครั้ง)</small>'
        +' • <a href="#" onclick="loadDB(1);return false">ลองโหลดใหม่</a>'
        +' • <a href="#" onclick="netLogShow();return false">ดูบันทึก 10 ครั้งล่าสุด</a>';
    }else{
      document.getElementById('stats').innerHTML='';
      document.getElementById('tb').innerHTML='<tbody><tr><td class="empty">โหลดข้อมูลกลางไม่ได้ — เช็คว่า Apps Script deploy แบบ Anyone และต่อเน็ตอยู่<br><small>'+esc(e.message||e)+'</small><br><button class="btn sm" style="margin-top:10px" onclick="loadDB(1)">ลองใหม่</button> <button class="btn sm" style="margin-top:10px" onclick="netLogShow()">ดูบันทึก 10 ครั้งล่าสุด</button></td></tr></tbody>';
-     document.getElementById('hb').innerHTML='● เชื่อม Drive ไม่ได้';
+     if(hb) hb.innerHTML='● เชื่อม Drive ไม่ได้';
    }
  }
 }
