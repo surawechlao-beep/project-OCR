@@ -1257,11 +1257,44 @@ function trnChips(label,list,counts,delFn,clearFn){
        +'border-radius:999px;width:17px;height:17px;line-height:17px;text-align:center;font-size:12px">&times;</b></span>';}).join('')
   +'<span onclick="'+clearFn+'()" style="cursor:pointer;color:#8a94a6;font-size:13px;text-decoration:underline;margin-left:2px">ล้างทั้งหมด</span>'
   +'</div>';}
+// ⭐ 22 ก.ย. 69 — แถบ VAT / NOVAT แบ่งด้วย "บริษัทขนส่ง" ไม่ใช่ช่อง VAT ของแถวอีกต่อไป
+//    ผู้ใช้สั่ง: โชคอุดมทรัพย์ = คิด VAT · โชคนริน / พรธาดา / วิไล ทรานสปอต / FedEx / จักรภัทร = ไม่คิด VAT
+//    ⚠️ ชีตไม่ถูกแตะตามคำสั่ง — แถวโชคนริน 78 แถว (OSA 37 + PD 41) และจักรภัทร 1 แถว
+//       ยังมีตัวเลข VAT ค้างอยู่เหมือนเดิม จึงจะเห็นแถวที่ VAT ≠ 0 โผล่ในแถบ NOVAT
+//       นั่นคือพฤติกรรมที่ถูกต้องของกติกานี้ ไม่ใช่บั๊ก (ท้ายตารางมีตัวนับบอกไว้)
+//    ⚠️ ชื่อที่ไม่อยู่ในลิสต์ไหนเลย → ตกไปแถบ NOVAT แต่ต้องขึ้นคำเตือน ห้ามเงียบ
+var TRN_VAT_VENDORS   = ['CHOKUDOMSAB','โชคอุดมทรัพย์'];
+var TRN_NOVAT_VENDORS = ['CHOKNARIN','โชคนริน','PORNTHADA','พรธาดา','WILAI','วิไล',
+                         'FEDERAL','FEDEX','เฟดเอ็กซ์','จักรภัทร'];
+function trnVendorVat(v){
+  var s=String(v==null?'':v).toUpperCase();
+  if(!s.trim())return 'novat';     // ไม่ระบุบริษัท (เช่นแถว FedEx ที่ลงแค่เลข AWB) → NOVAT เงียบ ๆ
+  var i;
+  for(i=0;i<TRN_VAT_VENDORS.length;i++)   if(s.indexOf(TRN_VAT_VENDORS[i].toUpperCase())>=0)   return 'gvat';
+  for(i=0;i<TRN_NOVAT_VENDORS.length;i++) if(s.indexOf(TRN_NOVAT_VENDORS[i].toUpperCase())>=0) return 'novat';
+  return 'unknown';
+}
+// กล่องเตือน: บริษัทที่ยังไม่ได้จัดกลุ่ม + จำนวนแถวที่ VAT ในชีตสวนทางกับแถบ
+function trnVendorNote(rows){
+  var iVd=ti('Vendor'), iVat=ti('VAT'), unk={}, clash=0;
+  rows.forEach(function(r){
+    if(trnVendorVat(r[iVd])==='unknown') unk[String(r[iVd]||'')]=1;
+    if(trnVat!=='gvat' && n2(r[iVat])>0) clash++;
+  });
+  var u=Object.keys(unk), h='';
+  if(u.length) h+='<div style="border:1px solid #e2c14d;background:#fffbe9;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px">'
+    +'⚠️ บริษัทขนส่งที่ยังไม่ได้จัดกลุ่ม VAT: <b>'+u.map(esc).join(', ')+'</b>'
+    +' — ระบบพักไว้แถบ NOVAT ก่อน ถ้าต้องคิด VAT ให้เพิ่มชื่อลงตัวแปร <code>TRN_VAT_VENDORS</code></div>';
+  if(clash) h+='<div style="border:1px solid #b6cdf5;background:#eef4ff;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px">'
+    +'ℹ️ แถบนี้มี <b>'+clash+'</b> แถวที่ยังมีตัวเลข VAT ค้างอยู่ในชีต — ตั้งใจไม่แก้ตามที่สั่งไว้ 22 ก.ย. 69'
+    +' (บรรทัด MSBC ด้านล่างใช้เฉพาะช่อง <b>ราคา</b> ไม่ได้ดึง VAT จากชีต จึงไม่กระทบยอด)</div>';
+  return h;
+}
 function trnMsbcBase(){     // แถวดิบหลังกรองด้วยคำค้น + แถบ VAT (ยังไม่กรอง Job)
- var q=trnQ.trim().toLowerCase(), iVat=ti('VAT');
+ var q=trnQ.trim().toLowerCase(), iVd=ti('Vendor');
  return TRN.rows.filter(function(r){
    if(q&&r.join(' ').toLowerCase().indexOf(q)<0)return false;
-   return (n2(r[iVat])>0) === (trnVat==='gvat');
+   return (trnVendorVat(r[iVd])==='gvat') === (trnVat==='gvat');   // unknown → ตกไปแถบ NOVAT
  });}
 function trnMsbcRows(){
  var iPo=ti('PO'),iJob=ti('Job No. Code'),iCs=ti('Ref. Cost Sheet No.'),iDp=ti('Department'),
@@ -1328,7 +1361,9 @@ function renderTRNmsbc(){
  var h='<div style="margin:4px 0 10px">'
   +'<span class="pill'+(trnVat==='gvat'?' on':'')+'" onclick="trnSetVat(\'gvat\')">VAT — ใบที่คิด VAT</span> '
   +'<span class="pill'+(trnVat==='novat'?' on':'')+'" onclick="trnSetVat(\'novat\')">NOVAT — ใบที่ไม่คิด VAT</span>'
+  +' <span class="muted" style="font-size:12px">— แบ่งตามบริษัทขนส่ง: VAT = โชคอุดมทรัพย์ · NOVAT = โชคนริน / พรธาดา / วิไล / FedEx / จักรภัทร</span>'
   +'</div>';
+ h+=trnVendorNote(base);
  h+='<div class="flex-between" style="margin:4px 0 8px"><div>'
   +'<input class="s" style="min-width:250px" id="trnq" placeholder="ค้น Cost Sheet / PO / Job / เลขใบเสนอราคา..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()"> '
   // เลือกจาก dropdown = "เพิ่ม" เข้ากอง ไม่ใช่แทนที่ · ตัวที่เลือกแล้วจะหายจากรายการ
