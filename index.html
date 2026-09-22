@@ -1241,7 +1241,10 @@ function trnJobKey(v){return String(v==null?'':v)||'(ไม่ระบุ)';}
 //    และเห็นจำนวนบรรทัดของแต่ละใบ · ทำงานร่วมกับตัวกรอง Job แบบ "และ" (ต้องเข้าทั้งคู่)
 var trnQuos=[];
 function trnQuoKey(v){return String(v==null?'':v).trim()||'(ไม่ระบุ)';}
-function trnQuoAdd(v){if(v&&trnQuos.indexOf(v)<0)trnQuos.push(v);renderTRN();}
+// ⚠️ ต้องล้างคำค้นทิ้งตอนเพิ่มชิป — ไม่งั้นรายการใน dropdown ถูกคำค้นบีบจนเหลือใบเดียว
+//    พอใบนั้นกลายเป็นชิปแล้ว dropdown จะว่างเปล่า ดูเหมือนปุ่มเสีย (ผู้ใช้เจอจริง 22 ก.ย. 69)
+//    ชิปทำหน้าที่กรองแทนคำค้นอยู่แล้ว จึงไม่เสียอะไร
+function trnQuoAdd(v){if(v&&trnQuos.indexOf(v)<0){trnQuos.push(v);trnQ='';}renderTRN();}
 function trnQuoDel(i){trnQuos.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่เลขใบ — กันอักขระแปลกทำ onclick พัง
 function trnQuoClear(){trnQuos=[];renderTRN();}
 // ป้ายชิปของตัวกรอง (ใช้ร่วมกันทั้ง Job และใบเสนอราคา) — กด × เอาออกทีละอัน
@@ -1339,7 +1342,7 @@ function trnMsbcRows(){
  }
  return L;}
 function trnSetVat(v){trnVat=v;trnJobs=[];trnQuos=[];renderTRN();}   // เปลี่ยนแถบแล้วล้างตัวกรอง (คนละชุดกัน)
-function trnJobAdd(v){if(v&&trnJobs.indexOf(v)<0)trnJobs.push(v);renderTRN();}
+function trnJobAdd(v){if(v&&trnJobs.indexOf(v)<0){trnJobs.push(v);trnQ='';}renderTRN();}   // ล้างคำค้นด้วยเหตุผลเดียวกับ trnQuoAdd
 function trnJobDel(i){trnJobs.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่ชื่อ Job — กันชื่อที่มีอัญประกาศทำ onclick พัง
 function trnJobClear(){trnJobs=[];renderTRN();}
 function renderTRNmsbc(){
