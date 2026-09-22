@@ -1236,6 +1236,27 @@ var trnVat='gvat';          // แถบที่เลือกอยู่: 'g
 var trnJobs=[];
 // แถวที่ไม่มี Job ต้องมีชื่อเรียกที่คงที่ ไม่งั้นตัวกรองกับรายการใน dropdown จะไม่ตรงกัน
 function trnJobKey(v){return String(v==null?'':v)||'(ไม่ระบุ)';}
+// ⭐ ตัวกรอง "ใบเสนอราคา" — เลือกได้หลายใบพร้อมกัน (22 ก.ย. 69) · [] ว่าง = ทั้งหมด
+//    หมายเหตุ: ช่องค้นหาค้นทุกคอลัมน์อยู่แล้ว พิมพ์เลขใบก็กรองได้ — dropdown นี้ไว้เลือกง่าย
+//    และเห็นจำนวนบรรทัดของแต่ละใบ · ทำงานร่วมกับตัวกรอง Job แบบ "และ" (ต้องเข้าทั้งคู่)
+var trnQuos=[];
+function trnQuoKey(v){return String(v==null?'':v).trim()||'(ไม่ระบุ)';}
+function trnQuoAdd(v){if(v&&trnQuos.indexOf(v)<0)trnQuos.push(v);renderTRN();}
+function trnQuoDel(i){trnQuos.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่เลขใบ — กันอักขระแปลกทำ onclick พัง
+function trnQuoClear(){trnQuos=[];renderTRN();}
+// ป้ายชิปของตัวกรอง (ใช้ร่วมกันทั้ง Job และใบเสนอราคา) — กด × เอาออกทีละอัน
+function trnChips(label,list,counts,delFn,clearFn){
+ if(!list.length)return '';
+ return '<div style="margin:0 0 8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+  +'<span style="font-size:12px;color:#7a8699;min-width:74px">'+esc(label)+'</span>'
+  +list.map(function(k,i){
+     return '<span style="display:inline-flex;align-items:center;gap:6px;background:#e8f0fe;color:#1a3a6b;'
+       +'border:1px solid #b6cdf5;border-radius:999px;padding:3px 6px 3px 11px;font-size:13px;font-weight:600">'
+       +esc(k)+' <span style="opacity:.65;font-weight:400">('+(counts[k]||0)+')</span>'
+       +'<b onclick="'+delFn+'('+i+')" title="เอาออก" style="cursor:pointer;background:#c9dbf8;color:#1a3a6b;'
+       +'border-radius:999px;width:17px;height:17px;line-height:17px;text-align:center;font-size:12px">&times;</b></span>';}).join('')
+  +'<span onclick="'+clearFn+'()" style="cursor:pointer;color:#8a94a6;font-size:13px;text-decoration:underline;margin-left:2px">ล้างทั้งหมด</span>'
+  +'</div>';}
 function trnMsbcBase(){     // แถวดิบหลังกรองด้วยคำค้น + แถบ VAT (ยังไม่กรอง Job)
  var q=trnQ.trim().toLowerCase(), iVat=ti('VAT');
  return TRN.rows.filter(function(r){
@@ -1244,9 +1265,12 @@ function trnMsbcBase(){     // แถวดิบหลังกรองด้�
  });}
 function trnMsbcRows(){
  var iPo=ti('PO'),iJob=ti('Job No. Code'),iCs=ti('Ref. Cost Sheet No.'),iDp=ti('Department'),
-     iAm=ti('Amount'),iVd=ti('Vendor');
+     iAm=ti('Amount'),iVd=ti('Vendor'),iQn=ti('Quotation No.');
+ // กรอง Job และใบเสนอราคาแบบ "และ" — ว่างทั้งคู่ = เอาทั้งหมด
  var rows=trnMsbcBase().filter(function(r){
-   return !trnJobs.length || trnJobs.indexOf(trnJobKey(r[iJob]))>=0;});
+   if(trnJobs.length && trnJobs.indexOf(trnJobKey(r[iJob]))<0)return false;
+   if(trnQuos.length && trnQuos.indexOf(trnQuoKey(r[iQn]))<0)return false;
+   return true;});
  var isVat=(trnVat==='gvat');            // แถบ "VAT" = ใบที่คิด VAT
  var L=rows.map(function(r,n){
   var amt=r2(n2(r[iAm])), cs=String(r[iCs]||'').trim();
@@ -1281,41 +1305,48 @@ function trnMsbcRows(){
       'GL',q[1],'NOWHT','','','','',dp,jb,'','','','','','','','','','','']);});});
  }
  return L;}
-function trnSetVat(v){trnVat=v;trnJobs=[];renderTRN();}   // เปลี่ยนแถบแล้วล้าง Job (Job คนละชุดกัน)
+function trnSetVat(v){trnVat=v;trnJobs=[];trnQuos=[];renderTRN();}   // เปลี่ยนแถบแล้วล้างตัวกรอง (คนละชุดกัน)
 function trnJobAdd(v){if(v&&trnJobs.indexOf(v)<0)trnJobs.push(v);renderTRN();}
 function trnJobDel(i){trnJobs.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่ชื่อ Job — กันชื่อที่มีอัญประกาศทำ onclick พัง
 function trnJobClear(){trnJobs=[];renderTRN();}
 function renderTRNmsbc(){
- var iJob=ti('Job No. Code');
+ var iJob=ti('Job No. Code'), iQn=ti('Quotation No.');
  var base=trnMsbcBase();
- // รายชื่อ Job ในแถบนี้ + จำนวนบรรทัด (Job ที่เลือกไว้แต่ไม่มีในแถบ/คำค้นใหม่ ให้ตัดทิ้ง)
- var jc={}; base.forEach(function(r){var j=trnJobKey(r[iJob]);jc[j]=(jc[j]||0)+1;});
- trnJobs=trnJobs.filter(function(j){return jc[j];});
+ // รายการใน dropdown แต่ละอันนับจาก "ของที่เหลือหลังกรองด้วยอีกอันแล้ว"
+ // → ตัวเลขในวงเล็บตรงกับที่จะได้จริงถ้ากดเลือก ไม่ใช่ตัวเลขลอย ๆ
+ var jc={}, qc={};
+ base.forEach(function(r){
+   var j=trnJobKey(r[iJob]), k=trnQuoKey(r[iQn]);
+   if(!trnQuos.length || trnQuos.indexOf(k)>=0) jc[j]=(jc[j]||0)+1;
+   if(!trnJobs.length || trnJobs.indexOf(j)>=0) qc[k]=(qc[k]||0)+1;});
+ // ที่เลือกไว้แต่ไม่มีในแถบ/คำค้นใหม่แล้ว ให้ตัดทิ้ง (นับจาก base ตรง ๆ ไม่ใช่ jc/qc ที่ไขว้กัน)
+ var jAll={}, qAll={};
+ base.forEach(function(r){jAll[trnJobKey(r[iJob])]=1;qAll[trnQuoKey(r[iQn])]=1;});
+ trnJobs=trnJobs.filter(function(j){return jAll[j];});
+ trnQuos=trnQuos.filter(function(k){return qAll[k];});
  var L=trnMsbcRows();
  var h='<div style="margin:4px 0 10px">'
   +'<span class="pill'+(trnVat==='gvat'?' on':'')+'" onclick="trnSetVat(\'gvat\')">VAT — ใบที่คิด VAT</span> '
   +'<span class="pill'+(trnVat==='novat'?' on':'')+'" onclick="trnSetVat(\'novat\')">NOVAT — ใบที่ไม่คิด VAT</span>'
   +'</div>';
  h+='<div class="flex-between" style="margin:4px 0 8px"><div>'
-  +'<input class="s" style="min-width:250px" id="trnq" placeholder="ค้น Cost Sheet / PO / Job..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()"> '
-  // เลือกจาก dropdown = "เพิ่ม" เข้ากอง ไม่ใช่แทนที่ · Job ที่เลือกแล้วจะหายจากรายการ
+  +'<input class="s" style="min-width:250px" id="trnq" placeholder="ค้น Cost Sheet / PO / Job / เลขใบเสนอราคา..." value="'+escA(trnQ)+'" oninput="trnQ=this.value;renderTRN()"> '
+  // เลือกจาก dropdown = "เพิ่ม" เข้ากอง ไม่ใช่แทนที่ · ตัวที่เลือกแล้วจะหายจากรายการ
   +'Job: <select class="s" onchange="trnJobAdd(this.value)"><option value="">'
   +(trnJobs.length?'+ เพิ่ม Job...':'ทั้งหมด ('+base.length+' บรรทัด)')+'</option>'
   +Object.keys(jc).sort().filter(function(j){return trnJobs.indexOf(j)<0;}).map(function(j){
      return '<option value="'+escA(j)+'">'+esc(j)+' ('+jc[j]+')</option>';}).join('')
+  +'</select> '
+  +'ใบเสนอราคา: <select class="s" onchange="trnQuoAdd(this.value)"><option value="">'
+  +(trnQuos.length?'+ เพิ่มใบ...':'ทั้งหมด ('+Object.keys(qc).length+' ใบ)')+'</option>'
+  +Object.keys(qc).sort().filter(function(k){return trnQuos.indexOf(k)<0;}).map(function(k){
+     return '<option value="'+escA(k)+'">'+esc(k)+' ('+qc[k]+')</option>';}).join('')
   +'</select>'
   +'</div><div><button class="btn sm" onclick="trnCopy()">คัดลอกทั้งตาราง</button> '
   +'<button class="btn green sm" onclick="trnXlsx()">Excel</button></div></div>';
- // ── ป้ายชิป Job ที่เลือกอยู่ · กด × เอาออกทีละอัน ──
- if(trnJobs.length) h+='<div style="margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
-  +trnJobs.map(function(j,i){
-     return '<span style="display:inline-flex;align-items:center;gap:6px;background:#e8f0fe;color:#1a3a6b;'
-       +'border:1px solid #b6cdf5;border-radius:999px;padding:3px 6px 3px 11px;font-size:13px;font-weight:600">'
-       +esc(j)+' <span style="opacity:.65;font-weight:400">('+jc[j]+')</span>'
-       +'<b onclick="trnJobDel('+i+')" title="เอาออก" style="cursor:pointer;background:#c9dbf8;color:#1a3a6b;'
-       +'border-radius:999px;width:17px;height:17px;line-height:17px;text-align:center;font-size:12px">&times;</b></span>';}).join('')
-  +'<span onclick="trnJobClear()" style="cursor:pointer;color:#8a94a6;font-size:13px;text-decoration:underline;margin-left:2px">ล้างทั้งหมด</span>'
-  +'</div>';
+ // ── ป้ายชิปของตัวกรองที่เลือกอยู่ · กด × เอาออกทีละอัน ──
+ h+=trnChips('Job:',trnJobs,jc,'trnJobDel','trnJobClear');
+ h+=trnChips('ใบเสนอราคา:',trnQuos,qc,'trnQuoDel','trnQuoClear');
  h+='<div class="tbl-wrap"><table class="rep"><thead><tr>'
   +TRN_MSBC.map(function(c,i){return '<th class="'+(trnMsbcNum(i)?'num':'')+'">'+esc(c)+'</th>';}).join('')
   +'</tr></thead><tbody>';
@@ -1329,8 +1360,9 @@ function renderTRNmsbc(){
  h+='<div class="note info" style="margin-top:12px">'+L.length+' บรรทัด &middot; รวม '+fmt2(tot)
   +' &#3647; &middot; แถบ <b>'+(trnVat==='gvat'?'VAT':'NOVAT')+'</b>'
   +(trnJobs.length?' &middot; Job <b>'+trnJobs.map(esc).join(', ')+'</b>':'')
+  +(trnQuos.length?' &middot; ใบเสนอราคา <b>'+trnQuos.map(esc).join(', ')+'</b>':'')
   +' &middot; WHT = <b>'+(trnVat==='gvat'?'SERVICE':'TRANSPORT')+'</b>'
-  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง (รวมทุก Job ที่เลือก)':'')
+  +(trnVat==='gvat'?' &middot; ต่อท้ายด้วยคู่ <b>INPUT VAT</b> แยกตามบริษัทขนส่ง (รวมทุกบรรทัดที่กรองอยู่)':'')
   +' &middot; ตรงตาม Template #Transport &middot; ปุ่ม 📋 คัดลอก / Excel ได้เฉพาะที่กรองอยู่ตรงหน้า</div>';
  return h;}
 function trnCopy(){
@@ -1352,7 +1384,10 @@ async function trnXlsx(){
 // ---- ตัวคุมหน้าย่อย ----
 function renderTRN(){
  var el=document.getElementById('trnbody');if(!el)return;
- var _pre=trnUpBox()+trnQueueHtml();
+ // ⛔ 22 ก.ย. 69: เอาช่องอัปโหลด/ลากไฟล์ออกจากหน้า Local transport ตามที่ผู้ใช้สั่ง
+ //    ฟังก์ชัน trnUpBox() และตัวอ่าน PDF อัตโนมัติยังอยู่ในไฟล์ แต่ไม่มีอะไรเรียกแล้ว
+ //    อยากได้คืน: เปลี่ยนบรรทัดล่างกลับเป็น  var _pre=trnUpBox()+trnQueueHtml();
+ var _pre=trnQueueHtml();
  if(!TRN.head||!TRN.head.length)TRN.head=TRN_HEAD.slice();
  if(!BUD.head||!BUD.head.length)BUD.head=BUD_HEAD.slice();
  // ⚠️ ช่องค้นหาอยู่ใน HTML ก้อนที่ถูกวาดใหม่ทุกครั้ง → พิมพ์ 1 ตัวแล้วโฟกัสหลุด
