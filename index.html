@@ -184,8 +184,11 @@ var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (nul
 // โฟลเดอร์เอกสารบน Drive
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
 // ============================================================================
-//  🔒 LOGIN — ทุกคำขอไป URL_AS จะแนบ token ให้อัตโนมัติ (GET: &t=... / POST: token ใน body)
-//     ถ้า server ตอบ {error:'auth'} → เด้งหน้า login
+//  🔒 LOGIN (23 ก.ย. 69) — ทุกคำขอไป URL_AS แนบ token ให้อัตโนมัติ
+//     GET: &t=...  ·  POST: token ในตัว body
+//     ถ้า server ตอบ {ok:false,error:'auth'} → เด้งหน้า login ทันที
+//  ⚠️ ตัวห่อ fetch ตัวนี้ต้องอยู่ "ก่อน" ตัวห่อล้างแคชด้านล่าง — ตัวล่างจะห่อทับตัวนี้อีกชั้น
+//     ลำดับจริงตอนเรียก: ล้างแคช → แนบ token → fetch จริง
 // ============================================================================
 var AUTH_KEY='osa_tok', AUTH_EXP='osa_tok_exp', AUTH_TOK=null, AUTH_STARTED=false;
 (function(){ try{ var t=localStorage.getItem(AUTH_KEY), x=+localStorage.getItem(AUTH_EXP)||0;
@@ -230,7 +233,6 @@ async function doLogin(){
   finally{ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
 }
 function doLogout(){ if(!confirm('ออกจากระบบ? ข้อมูลที่เก็บไว้ในเครื่องจะถูกลบ'))return; showLogin(''); }
-
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
  var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No'),iTmI=ix('Terminal Inv'),iInI=ix('Insurance Inv');
@@ -1093,6 +1095,7 @@ window.addEventListener('DOMContentLoaded',()=>{
  dz.addEventListener('dragleave',e=>{e.preventDefault();dz.style.background='';});
  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.background='';handleFiles([...e.dataTransfer.files]);});
  document.getElementById('loginPw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+ // 🔒 มี token ที่ยังไม่หมดอายุ = เข้าได้เลย · ไม่มี = เด้งหน้า login ก่อน ไม่ยิง ?action=db
  if(AUTH_TOK){ AUTH_STARTED=true; loadDB(); } else showLogin('');
 });
 
@@ -1305,6 +1308,26 @@ function trnQuoKey(v){return String(v==null?'':v).trim()||'(ไม่ระบ�
 function trnQuoAdd(v){if(v&&trnQuos.indexOf(v)<0){trnQuos.push(v);trnQ='';}renderTRN();}
 function trnQuoDel(i){trnQuos.splice(i,1);renderTRN();}   // ⚠️ ส่ง "ลำดับ" ไม่ใช่เลขใบ — กันอักขระแปลกทำ onclick พัง
 function trnQuoClear(){trnQuos=[];renderTRN();}
+function trnQClear(){trnQ='';renderTRN();}
+// ⚠️ 22 ก.ย. 69: พิมพ์คำค้นผิดแล้วตารางว่างเปล่า ผู้ใช้เข้าใจว่าข้อมูลหาย
+//    ห้ามปล่อยตารางว่างเฉย ๆ — ต้องบอกว่าถูกกรองออก และให้ปุ่มกดกลับได้ทันที
+function trnEmptyMsg(){
+  var why=[];
+  if(trnQ.trim())    why.push('คำค้น <b>"'+esc(trnQ)+'"</b>');
+  if(trnJobs.length) why.push('Job ที่เลือกไว้');
+  if(trnQuos.length) why.push('ใบเสนอราคาที่เลือกไว้');
+  var tab='<b>'+(trnVat==='gvat'?'VAT':'NOVAT')+'</b>';
+  var s='<div style="padding:20px;text-align:center;color:#7a8699;font-size:14px">';
+  s+= why.length ? 'ไม่มีบรรทัดที่ตรงกับ '+why.join(' + ')+' ในแถบ '+tab
+                 : 'แถบ '+tab+' ยังไม่มีบรรทัด';
+  if(why.length){
+    s+='<div style="margin:10px 0 6px">';
+    if(trnQ.trim())    s+='<button class="btn ghost sm" onclick="trnQClear()">ล้างคำค้น</button> ';
+    if(trnJobs.length) s+='<button class="btn ghost sm" onclick="trnJobClear()">ล้าง Job</button> ';
+    if(trnQuos.length) s+='<button class="btn ghost sm" onclick="trnQuoClear()">ล้างใบเสนอราคา</button>';
+    s+='</div><div style="font-size:12px">ข้อมูลไม่ได้หาย — แค่ถูกกรองออกชั่วคราว</div>';
+  }
+  return s+'</div>';}
 // ป้ายชิปของตัวกรอง (ใช้ร่วมกันทั้ง Job และใบเสนอราคา) — กด × เอาออกทีละอัน
 function trnChips(label,list,counts,delFn,clearFn){
  if(!list.length)return '';
@@ -1351,11 +1374,18 @@ function trnVendorNote(rows){
     +' (บรรทัด MSBC ด้านล่างใช้เฉพาะช่อง <b>ราคา</b> ไม่ได้ดึง VAT จากชีต จึงไม่กระทบยอด)</div>';
   return h;
 }
-function trnMsbcBase(){     // แถวดิบหลังกรองด้วยคำค้น + แถบ VAT (ยังไม่กรอง Job)
- var q=trnQ.trim().toLowerCase(), iVd=ti('Vendor');
+// แถวของแถบนี้ "ก่อน" กรองด้วยคำค้น
+// ⚠️ ต้องมีแยกต่างหาก — ใช้ตัดสินว่าชิปที่เลือกไว้ยังมีตัวตนอยู่ไหม
+//    ถ้าไปตัดสินจากผลหลังกรองคำค้น พิมพ์ผิดทีเดียวชิปจะถูกลบทิ้งถาวร (บั๊กจริง 22 ก.ย. 69)
+function trnTabRows(){
+ var iVd=ti('Vendor');
  return TRN.rows.filter(function(r){
-   if(q&&r.join(' ').toLowerCase().indexOf(q)<0)return false;
    return (trnVendorVat(r[iVd])==='gvat') === (trnVat==='gvat');   // unknown → ตกไปแถบ NOVAT
+ });}
+function trnMsbcBase(){     // แถวดิบหลังกรองด้วยคำค้น + แถบ VAT (ยังไม่กรอง Job)
+ var q=trnQ.trim().toLowerCase();
+ return trnTabRows().filter(function(r){
+   return !q || r.join(' ').toLowerCase().indexOf(q)>=0;
  });}
 function trnMsbcRows(){
  var iPo=ti('PO'),iJob=ti('Job No. Code'),iCs=ti('Ref. Cost Sheet No.'),iDp=ti('Department'),
@@ -1413,9 +1443,11 @@ function renderTRNmsbc(){
    var j=trnJobKey(r[iJob]), k=trnQuoKey(r[iQn]);
    if(!trnQuos.length || trnQuos.indexOf(k)>=0) jc[j]=(jc[j]||0)+1;
    if(!trnJobs.length || trnJobs.indexOf(j)>=0) qc[k]=(qc[k]||0)+1;});
- // ที่เลือกไว้แต่ไม่มีในแถบ/คำค้นใหม่แล้ว ให้ตัดทิ้ง (นับจาก base ตรง ๆ ไม่ใช่ jc/qc ที่ไขว้กัน)
+ // ตัดชิปที่ไม่มีตัวตนในแถบนี้แล้วทิ้ง (เช่นสลับแถบ VAT/NOVAT)
+ // ⚠️ ต้องนับจาก trnTabRows() ซึ่ง "ไม่ผ่านคำค้น" — ถ้านับจาก base พิมพ์คำค้นผิดทีเดียว
+ //    (เช่น 'cm') จะไม่เจออะไรเลย แล้วชิปที่เลือกไว้ถูกลบทิ้งถาวร กู้ไม่ได้ (เกิดจริง 22 ก.ย. 69)
  var jAll={}, qAll={};
- base.forEach(function(r){jAll[trnJobKey(r[iJob])]=1;qAll[trnQuoKey(r[iQn])]=1;});
+ trnTabRows().forEach(function(r){jAll[trnJobKey(r[iJob])]=1;qAll[trnQuoKey(r[iQn])]=1;});
  trnJobs=trnJobs.filter(function(j){return jAll[j];});
  trnQuos=trnQuos.filter(function(k){return qAll[k];});
  var L=trnMsbcRows();
@@ -1443,6 +1475,8 @@ function renderTRNmsbc(){
  // ── ป้ายชิปของตัวกรองที่เลือกอยู่ · กด × เอาออกทีละอัน ──
  h+=trnChips('Job:',trnJobs,jc,'trnJobDel','trnJobClear');
  h+=trnChips('ใบเสนอราคา:',trnQuos,qc,'trnQuoDel','trnQuoClear');
+ // ไม่มีบรรทัดเลย → โชว์เหตุผล + ปุ่มล้างตัวกรอง แทนตารางหัวโล้น ๆ ที่ดูเหมือนข้อมูลหาย
+ if(!L.length) return h+trnEmptyMsg();
  h+='<div class="tbl-wrap"><table class="rep"><thead><tr>'
   +TRN_MSBC.map(function(c,i){return '<th class="'+(trnMsbcNum(i)?'num':'')+'">'+esc(c)+'</th>';}).join('')
   +'</tr></thead><tbody>';
