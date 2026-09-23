@@ -72,6 +72,15 @@ select,input.s{padding:6px 10px;border:1px solid #cdd8ea;border-radius:7px;font-
 mark{background:#fff3a8}
 </style></head>
 <body>
+<div id="loginOv" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.55);align-items:center;justify-content:center">
+ <div style="background:#fff;border-radius:14px;padding:26px 24px;width:min(340px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.25);text-align:center">
+  <div style="font-size:17px;font-weight:700;color:#1f3864;margin-bottom:4px">🔒 OSA Import</div>
+  <div style="font-size:12px;color:#64748b;margin-bottom:16px">ใส่รหัสผ่านเพื่อเข้าใช้งาน</div>
+  <input id="loginPw" type="password" autocomplete="current-password" placeholder="รหัสผ่าน" style="width:100%;padding:11px;border:1px solid #cdd8ea;border-radius:9px;font-family:inherit;font-size:14px;margin-bottom:10px">
+  <button id="loginBtn" onclick="doLogin()" style="width:100%;padding:11px;border:none;border-radius:9px;background:#2e5496;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">เข้าสู่ระบบ</button>
+  <div id="loginErr" style="color:#c0392b;font-size:12px;margin-top:10px;min-height:16px"></div>
+ </div>
+</div>
 <div id="ov"><div class="ovbox"><div class="spin"></div><div id="ovt" style="margin-top:13px;font-weight:700;color:#1f3864">กำลังทำงาน...</div></div></div>
 <div class="app">
 <header>
@@ -174,6 +183,54 @@ var TRN={head:[],rows:[]},BUD={head:[],rows:[]};   // 🚚 ค่าขนส่
 var purHawbSel=null; // Purchase: เลือกโชว์บาง HAWB (null=ทั้งหมด)
 // โฟลเดอร์เอกสารบน Drive
 var DRIVE_INBOX_URL='https://drive.google.com/drive/folders/1hi_J3a43Dfm2_6GWyAJ0dJHzpHfm8C8I';
+// ============================================================================
+//  🔒 LOGIN — ทุกคำขอไป URL_AS จะแนบ token ให้อัตโนมัติ (GET: &t=... / POST: token ใน body)
+//     ถ้า server ตอบ {error:'auth'} → เด้งหน้า login
+// ============================================================================
+var AUTH_KEY='osa_tok', AUTH_EXP='osa_tok_exp', AUTH_TOK=null, AUTH_STARTED=false;
+(function(){ try{ var t=localStorage.getItem(AUTH_KEY), x=+localStorage.getItem(AUTH_EXP)||0;
+  if(t && x>Date.now()) AUTH_TOK=t; else { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(AUTH_EXP); } }catch(_){} })();
+var _rawFetch = window.fetch.bind(window);
+window.fetch = function(u, opt){
+  if (typeof u==='string' && u.indexOf(URL_AS)===0) {
+    if (opt && opt.method==='POST' && typeof opt.body==='string') {
+      try { var b=JSON.parse(opt.body); if(b.action!=='login'){ b.token=AUTH_TOK; opt=Object.assign({},opt,{body:JSON.stringify(b)}); } } catch(_){}
+    } else if (AUTH_TOK) {
+      u += (u.indexOf('?')<0?'?':'&') + 't=' + encodeURIComponent(AUTH_TOK);
+    }
+    return _rawFetch(u, opt).then(function(r){
+      r.clone().text().then(function(t){ if(/^\s*\{\s*"ok"\s*:\s*false\s*,\s*"error"\s*:\s*"auth"/.test(t)) showLogin('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }).catch(function(){});
+      return r;
+    });
+  }
+  return _rawFetch(u, opt);
+};
+function showLogin(msg){
+  AUTH_TOK=null;
+  try{ localStorage.removeItem(AUTH_KEY); localStorage.removeItem(AUTH_EXP); cacheClear(); }catch(_){}
+  var ov=document.getElementById('ov'); if(ov) ov.style.display='none';
+  document.getElementById('loginErr').textContent=msg||'';
+  document.getElementById('loginOv').style.display='flex';
+  setTimeout(function(){ var i=document.getElementById('loginPw'); if(i) i.focus(); },50);
+}
+async function doLogin(){
+  var pw=document.getElementById('loginPw').value, btn=document.getElementById('loginBtn'), err=document.getElementById('loginErr');
+  if(!pw){ err.textContent='กรุณากรอกรหัสผ่าน'; return; }
+  btn.disabled=true; btn.textContent='กำลังตรวจสอบ...'; err.textContent='';
+  try{
+    var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'login',password:pw})});
+    var j=await r.json();
+    if(!j.ok) throw new Error(j.error||'รหัสผ่านไม่ถูกต้อง');
+    AUTH_TOK=j.token;
+    try{ localStorage.setItem(AUTH_KEY,j.token); localStorage.setItem(AUTH_EXP,String(j.expires||0)); }catch(_){}
+    document.getElementById('loginPw').value='';
+    document.getElementById('loginOv').style.display='none';
+    if(!AUTH_STARTED){ AUTH_STARTED=true; loadDB(); } else loadDB(true);
+  }catch(e){ err.textContent=/Failed|NetworkError/.test(e.message)?'เชื่อมต่อไม่ได้ — ตรวจสอบอินเทอร์เน็ต':e.message; }
+  finally{ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
+}
+function doLogout(){ if(!confirm('ออกจากระบบ? ข้อมูลที่เก็บไว้ในเครื่องจะถูกลบ'))return; showLogin(''); }
+
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
  var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No'),iTmI=ix('Terminal Inv'),iInI=ix('Insurance Inv');
@@ -1035,7 +1092,8 @@ window.addEventListener('DOMContentLoaded',()=>{
  ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.background='#eef4ff';}));
  dz.addEventListener('dragleave',e=>{e.preventDefault();dz.style.background='';});
  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.background='';handleFiles([...e.dataTransfer.files]);});
- loadDB();
+ document.getElementById('loginPw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+ if(AUTH_TOK){ AUTH_STARTED=true; loadDB(); } else showLogin('');
 });
 
 // ============================================================================
