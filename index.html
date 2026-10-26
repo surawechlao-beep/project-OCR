@@ -917,6 +917,7 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(y.indexOf('PPOV')===0)return 'GLOBAL LOGISTICS INTEGRATOR (THAILAND) CO., LTD';
  if(y.indexOf('DLSO')===0)return 'SANKYU THAI COMPANY LIMITED';   // ซังกิว — เดิมช่องนี้ว่าง
  if(y.indexOf('QDRU')===0)return 'S.CHAKKRIT TRANSPORT LIMITED PARTNERSHIP';   // หจก. ส.จักรกฤษณ์ ขนส่ง (16 ต.ค. 69)
+ if(y.indexOf('DBJO')===0)return 'KUEHNE+NAGEL LIMITED';   // Kuehne + Nagel (26 ต.ค. 69)
  return '';}
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[29]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
