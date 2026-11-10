@@ -148,6 +148,7 @@ mark{background:#fff3a8;border-radius:3px;padding:0 2px}
 ::-webkit-scrollbar-thumb{background:#c3cedd;border-radius:7px;border:3px solid transparent;background-clip:content-box}
 ::-webkit-scrollbar-thumb:hover{background:#9fb0c6;background-clip:content-box;border:3px solid transparent}
 ::-webkit-scrollbar-track{background:transparent}
+.spin{display:inline-block;animation:staspin 1s linear infinite}@keyframes staspin{to{transform:rotate(360deg)}}
 </style></head>
 <body>
 <div id="loginOv" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.55);align-items:center;justify-content:center">
@@ -2237,7 +2238,10 @@ function staToday(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia
 function staD(v){var s=String(v==null?'':v);if(/^\d{4}-\d{2}-\d{2}T/.test(s)){var d=new Date(s);if(!isNaN(d))return d.toLocaleDateString('sv-SE',{timeZone:'Asia/Bangkok'});}return s;}
 function staSplit(v){return String(v==null?'':v).split(/[,\n]/).map(function(s){return s.trim();}).filter(Boolean);}
 function staUniq(a){var s={},o=[];a.forEach(function(x){x=String(x||'').trim();if(x&&!s[x]){s[x]=1;o.push(x);}});return o;}
-function staStage(r){if(String(sv(r,'Acc Done')).trim())return 'done';if(String(sv(r,'Delivery Note')).trim())return 'acc';return 'pend';}
+// ขั้น: เสร็จสิ้น (Acc Done) → รอบัญชีตรวจ (มีใบส่งของ) → ส่งบิล (มี S/O แล้ว) → รอกรอกข้อมูล · Remark ขึ้นต้น #ซ่อน = ซ่อน
+function staHidden(r){return /^#ซ่อน/.test(String(sv(r,'Remark')).trim());}
+function staStage(r){if(staHidden(r))return 'hide';if(String(sv(r,'Acc Done')).trim())return 'done';if(String(sv(r,'Delivery Note')).trim())return 'acc';
+ if(String(sv(r,'S/O')).trim())return 'pend';return 'wait';}
 // ของที่มาถึง = กลุ่ม PO + HAWB จาก Finance ทั้งหมด · Supplier ดึงจาก Purchase (Shipper) ของ HAWB นั้น
 function staArrivals(){
  var H=FIN_ALL.head,c=function(n){return colIdx(H,n);},iH=c('HAWB'),iP=c('PO'),iJ=c('Job No. Code'),iDt=c('Date'),iDp=c('Department');
@@ -2247,47 +2251,63 @@ function staArrivals(){
  FIN_ALL.rows.forEach(function(r){var h=String(r[iH]||'').trim(),p=String(r[iP]||'').trim();if(!h&&!p)return;
   var k=p+'|'+h;if(!m[k]){m[k]={k:k,po:p,hawb:h,job:String(r[iJ]||''),dept:String(r[iDp]||''),date:staD(r[iDt]).slice(0,10),sup:sup[h]||''};o.push(m[k]);}});
  return o.sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0;});}
-function staTaken(){var t={};STA.rows.forEach(function(r){var ps=staSplit(sv(r,'PO')),hs=staSplit(sv(r,'HAWB'));
-  ps.forEach(function(p){if(!hs.length)t[p+'|*']=1;hs.forEach(function(h){t[p+'|'+h]=1;});});});return t;}
-function staFree(){var t=staTaken();return staArrivals().filter(function(a){return !t[a.po+'|'+a.hawb]&&!t[a.po+'|*'];});}
+// 1 บรรทัด = 1 SO · Job ที่มีหลาย SO แตกเป็นหลายบรรทัด · ไม่มี SO = 1 บรรทัดเปล่า
+function soList(jobs){var L=[];staSplit(jobs).forEach(function(j){(SO_BY_JOB[j]||[]).forEach(function(x){L.push(x);});});return L;}
+var STA_EXTRA=[];   // บรรทัดที่กด ➕ เพิ่มเอง (ยังไม่บันทึก)
+function staTaken(){var t={};STA.rows.forEach(function(r){var ps=staSplit(sv(r,'PO')),hs=staSplit(sv(r,'HAWB')),so=String(sv(r,'S/O')).trim();
+  ps.forEach(function(p){(hs.length?hs:['']).forEach(function(h){t[p+'|'+h+'|'+so]=1;t[p+'|'+h+'|*']=1;});});});return t;}
+function staVirtual(){var t=staTaken(),o=[];
+ staArrivals().forEach(function(a){var base={'Receipt date':a.date,'PO':a.po,'HAWB':a.hawb,'Job':a.job,'Department':a.dept,'Supplier':a.sup};
+  var L=soList(a.job);
+  if(!L.length){if(!t[a.k+'|*'])o.push({key:'v'+a.k+'|',v:base});return;}
+  L.forEach(function(x){if(t[a.k+'|'+x.so])return;
+   o.push({key:'v'+a.k+'|'+x.so,v:Object.assign({},base,{'S/O':x.so,'Sale':x.sale,'Customer':x.cus,'Customer PO':x.cpo,'Delivery Date':x.dd})});});});
+ return STA_EXTRA.concat(o);}
 function staHit(o){var q=staQ.toLowerCase();return !q||JSON.stringify(o).toLowerCase().indexOf(q)>=0;}
+var STA_DRAFT={}, STA_LIST=[], STA_BUSY={};
+var STA_RO=/^(Weekly|Delivery Note|Acc Done|Updated)$/;   // ช่องที่พิมพ์เองไม่ได้
 function renderSTA(){
  var el=document.getElementById('stabody');if(!el)return;
- var free=staFree(),cnt={wait:free.length,pend:0,acc:0,done:0};
+ var virt=staVirtual(),cnt={wait:virt.length,pend:0,acc:0,done:0,hide:0};
  STA.rows.forEach(function(r){cnt[staStage(r)]++;});
  var h='';
- if(!STA.ok)h+='<div class="note" style="background:var(--warn-bg);border:1px solid var(--warn-line);border-left:4px solid var(--warn);color:var(--warn)">⚠️ Apps Script ยังไม่ส่งชีต Status มา — ดูได้แต่ยังบันทึก/แนบไฟล์ไม่ได้ (ติดตั้ง Status.gs + แก้ Code.gs ตามไฟล์วิธีติดตั้ง แล้ว Deploy เวอร์ชันใหม่)</div>';
+ if(!STA.ok)h+='<div class="note" style="background:var(--warn-bg);border:1px solid var(--warn-line);border-left:4px solid var(--warn);color:var(--warn)">⚠️ Apps Script ยังไม่ส่งชีต Status มา — ดูได้แต่ยังบันทึกไม่ได้</div>';
  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">';
- [['wait','📥 ① รอกรอกข้อมูล'],['pend','🧾 ② ส่งบิล'],['acc','🔍 ③ รอบัญชีตรวจ'],['done','✅ ④ เสร็จสิ้น']].forEach(function(p){
+ [['wait','📥 ① รอกรอกข้อมูล'],['pend','🧾 ② ส่งบิล'],['acc','🔍 ③ รอบัญชีตรวจ'],['done','✅ ④ เสร็จสิ้น'],['hide','🙈 ซ่อน']].forEach(function(p){
   h+='<span class="pill'+(staF===p[0]?' on':'')+'" onclick="staF=\''+p[0]+'\';renderSTA()">'+p[1]+' ('+cnt[p[0]]+')</span>';});
  h+='<input class="s" id="staq" style="flex:1;min-width:200px" placeholder="🔎 ค้นหา PO / HAWB / S/O / ลูกค้า..." value="'+escA(staQ)+'" oninput="staQ=this.value;renderSTA();var x=document.getElementById(\'staq\');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}">';
  h+='</div><div id="staform"></div><input type="file" id="stafile" accept="application/pdf,image/png,image/jpeg" style="display:none" onchange="staUpload(this)">';
- if(staF==='wait'){
-  var rows=free.filter(staHit);STA_ARR=rows;
-  h+='<div class="flex-between" style="margin:4px 0 8px"><b>ของมาถึงแล้ว (มีใบขน) ยังไม่ได้สร้างรายการ — '+rows.length+'</b>'
-   +'<button class="btn sm" onclick="staNewFromSel()">➕ สร้างรายการจากที่เลือก</button></div>';
-  h+='<div class="tbl-wrap"><table>'+staTH('<input type="checkbox" onclick="staAll(this.checked)">')+'<tbody>';
-  rows.forEach(function(a,ix){var v=Object.assign({'Receipt date':a.date,'PO':a.po,'HAWB':a.hawb,'Job':a.job,'Department':a.dept,'Supplier':a.sup},soFill(a.job));
-   h+='<tr><td><input type="checkbox" '+(staSel[a.k]?'checked':'')+' onclick="staTick('+ix+',this.checked)"></td>';
-   staCols().forEach(function(c){h+=staCell(c,v[c]==null?'':v[c],'wait');});h+='</tr>';});
-  if(!rows.length)h+='<tr><td colspan="'+(staCols().length+1)+'" class="muted" style="text-align:center;padding:18px">ไม่มีของค้างรอสร้างรายการ 🎉</td></tr>';
-  h+='</tbody></table></div>';
- }else{
-  var list=STA.rows.filter(function(r){return staStage(r)===staF&&staHit(r);});
-  h+='<div class="flex-between" style="margin:4px 0 8px"><b>'+list.length+' รายการ</b>'+(staF==='pend'?'<button class="btn ghost sm" onclick="staForm(null,null)">➕ เพิ่มรายการเปล่า</button>':'')+'</div>';
-  h+='<div class="tbl-wrap"><table>'+staTH('จัดการ')+'<tbody>';
-  list.forEach(function(r){var ri=r._ri,st=staStage(r);
-   var act='<button class="btn ghost sm" title="แก้ไข" onclick="staEdit('+ri+')">✏️</button> ';
-   if(st==='pend')act+='<button class="btn ghost sm" onclick="staPick('+ri+')">📎 แนบใบส่งของ</button>';
-   if(st==='acc')act+='<button class="btn ghost sm" onclick="staPick('+ri+')" title="แนบไฟล์ใหม่แทน">📎</button> <button class="btn sm" onclick="staAcc('+ri+',1)">✅ บัญชีเรียบร้อย</button>';
-   if(st==='done')act+='<button class="btn ghost sm" onclick="staAcc('+ri+',0)">↩︎ ย้อนกลับ</button>';
-   h+='<tr><td style="white-space:nowrap">'+act+'</td>';
-   staCols().forEach(function(c){h+=staCell(c,sv(r,c),st);});h+='</tr>';});
-  if(!list.length)h+='<tr><td colspan="'+(staCols().length+1)+'" class="muted" style="text-align:center;padding:18px">ไม่มีรายการ</td></tr>';
-  h+='</tbody></table></div>';
- }
+ if(staF!=='done'&&staF!=='hide')h+='<div class="note info" style="padding:8px 12px;margin-bottom:8px">พิมพ์ในช่องได้เลย แล้วกด <b>💾 บันทึก</b> ท้ายแถว · 1 บรรทัด = 1 SO (Job ที่มีหลาย SO แตกเป็นหลายบรรทัดให้แล้ว) · บรรทัดไหนไม่เกี่ยวกด 🙈 · ของไปหลาย SO ที่ไม่มีในรายการกด ➕ เพิ่มบรรทัด · กรอก S/O แล้วบันทึก = ย้ายไป ② ส่งบิล</div>';
+ var list=[];
+ if(staF==='wait')list=virt.map(function(x){return {key:x.key,v:x.v,ri:null,st:'wait'};});
+ STA.rows.forEach(function(r){var st=staStage(r);if(st===staF)list.push({key:'r'+r._ri,v:staVals(r),ri:r._ri,st:st});});
+ list=list.filter(function(x){return staHit(x.v);});STA_LIST=list;
+ h+='<div class="flex-between" style="margin:4px 0 8px"><b>'+list.length+' บรรทัด</b></div>';
+ h+='<div class="tbl-wrap"><table>'+staTH('จัดการ')+'<tbody>';
+ list.forEach(function(x,ix){
+  var d=STA_DRAFT[x.key]||{},busy=STA_BUSY[x.key],ro=(x.st==='done'||x.st==='hide');
+  var act='';
+  if(!ro)act+='<button class="btn sm" id="stas'+ix+'" '+(busy?'disabled':'')+' onclick="staSave('+ix+')">'+(busy?'<span class="spin">⏳</span> กำลังบันทึก...':'💾 บันทึก')+'</button> ';
+  if(x.st==='pend')act+='<button class="btn ghost sm" onclick="staPick('+x.ri+')">📎 แนบใบส่งของ</button> ';
+  if(x.st==='acc')act+='<button class="btn ghost sm" onclick="staPick('+x.ri+')" title="แนบไฟล์ใหม่แทน">📎</button> <button class="btn sm" onclick="staAcc('+x.ri+',1)">✅ บัญชีเรียบร้อย</button> ';
+  if(x.st==='done')act+='<button class="btn ghost sm" onclick="staAcc('+x.ri+',0)">↩︎ ย้อนกลับ</button> ';
+  if(!ro)act+='<button class="btn ghost sm" title="เพิ่มบรรทัด PO/HAWB เดียวกัน สำหรับ SO อื่น" onclick="staDup('+ix+')">➕</button> <button class="btn ghost sm" title="ซ่อนบรรทัดนี้ (ไม่เกี่ยว)" onclick="staHide('+ix+',1)">🙈</button>';
+  if(x.st==='hide')act+='<button class="btn ghost sm" onclick="staHide('+ix+',0)">↩︎ เลิกซ่อน</button>';
+  h+='<tr'+(x.ri==null?' style="background:var(--surface-2,#fafbfd)"':'')+'><td style="white-space:nowrap">'+act+'</td>';
+  staCols().forEach(function(c){var val=(c in d)?d[c]:(x.v[c]==null?'':x.v[c]);
+   if(c==='Weekly'){h+='<td><b>'+esc(STA_WEEK[x.st]||'ซ่อน')+'</b></td>';return;}
+   if(ro||STA_RO.test(c)){h+=staCell(c,val,x.st);return;}
+   var tp=/^(Receipt date|Delivery Date|Delivery to Customer|Arriving to Customer)$/.test(c)?'date':'text';
+   var w=c==='Remark'?240:(tp==='date'?130:(/^(Customer|Supplier)$/.test(c)?200:110));
+   h+='<td style="padding:2px 3px"><input class="s" type="'+tp+'" style="width:'+w+'px;padding:4px 6px;font-size:12px'+((c in d)?';border-color:var(--warn,#d97706)':'')+'" value="'+escA(String(val).slice(0,tp==='date'?10:9999))+'" oninput="staEd('+ix+',\''+c.replace(/'/g,"\\'")+'\',this.value);this.style.borderColor=\'#d97706\'" onkeydown="if(event.key===\'Enter\')staSave('+ix+')"></td>';});
+  h+='</tr>';});
+ if(!list.length)h+='<tr><td colspan="'+(staCols().length+1)+'" class="muted" style="text-align:center;padding:18px">ไม่มีรายการ</td></tr>';
+ h+='</tbody></table></div>';
  el.innerHTML=h;}
-function staTick(ix,on){var a=STA_ARR[ix];if(a)staSel[a.k]=on;}
+function staEd(ix,c,val){var x=STA_LIST[ix];if(!x)return;(STA_DRAFT[x.key]=STA_DRAFT[x.key]||{})[c]=val;}
+function staDup(ix){var x=STA_LIST[ix];if(!x)return;var v=Object.assign({},x.v,STA_DRAFT[x.key]||{});
+ var n={};['Receipt date','PO','HAWB','Job','Code','Department','Supplier'].forEach(function(c){n[c]=v[c]||'';});
+ STA_EXTRA.unshift({key:'x'+Date.now(),v:n});staF='wait';renderSTA();}
 function staTH(lead){var g='<tr>'+(lead?'<th rowspan="2">'+lead+'</th>':''),c='<tr>';
  STA_GROUPS.forEach(function(G){if(!G[0]){g+='<th rowspan="2">'+esc(G[1][0])+'</th>';return;}
   g+='<th colspan="'+G[1].length+'" style="text-align:center;border-bottom:1px solid var(--line)">'+esc(G[0])+'</th>';
@@ -2295,39 +2315,37 @@ function staTH(lead){var g='<tr>'+(lead?'<th rowspan="2">'+lead+'</th>':''),c='<
  return '<thead>'+g+'</tr>'+c+'</tr></thead>';}
 function staCols(){var o=[];STA_GROUPS.forEach(function(G){o=o.concat(G[1]);});return o;}
 function staCell(c,v,stage){
- if(c==='Weekly')return '<td><b>'+esc(STA_WEEK[stage]||'')+'</b></td>';
  if(c==='Delivery Note'){var u=staUrl(v);return '<td>'+(u?'<a href="'+escA(u)+'" target="_blank" rel="noopener noreferrer">📄 เปิด</a>':'')+'</td>';}
  if(c==='Remark')return '<td style="min-width:240px;max-width:360px;white-space:normal">'+esc(v)+'</td>';
  return '<td>'+esc(STA_DATE.test(c)?staD(v).slice(0,10):v)+'</td>';}
-function staAll(on){staFree().forEach(function(a){staSel[a.k]=on;});renderSTA();}
-function staNewFromSel(){
- var pick=staArrivals().filter(function(a){return staSel[a.k];});
- if(!pick.length){alert('ติ๊กเลือกรายการก่อน');return;}
- var j=function(f){return staUniq(pick.map(f)).join(', ');};
- staForm(Object.assign({'Receipt date':pick.map(function(a){return a.date;}).sort().pop()||'','PO':j(function(a){return a.po;}),'HAWB':j(function(a){return a.hawb;}),
-  'Job':j(function(a){return a.job;}),'Department':j(function(a){return a.dept;}),'Supplier':j(function(a){return a.sup;})},soFill(j(function(a){return a.job;}))),null);}
 function staVals(r){var v={};STA.head.forEach(function(c,i){v[c]=STA_DATE.test(c)?staD(r[i]).slice(0,10):(r[i]==null?'':r[i]);});return v;}
-function staEdit(ri){var r=STA.rows.find(function(x){return x._ri===ri;});if(!r)return;var v=staVals(r),f=soFill(v['Job']);
- Object.keys(f).forEach(function(k){if(!String(v[k]||'').trim())v[k]=f[k];});staForm(v,ri);}
-function staForm(v,ri){
- v=v||{};var H=STA.head;
- var h='<div style="border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:0 0 14px;background:var(--surface);box-shadow:var(--sh-1);max-width:980px">'
-  +'<h3 style="margin:0 0 10px">'+(ri==null?'สร้างรายการใหม่':'แก้ไขรายการ')+'</h3><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 14px">';
- staCols().forEach(function(c){var i=H.indexOf(c);if(i<0||c==='Weekly'||c==='Updated'||c==='Acc Done'||c==='Delivery Note')return;
-  var val=v[c]==null?'':v[c],lab=STA_TH[c]||c;
-  if(c==='Remark'){h+='<label style="font-size:12px;color:#6b7a90;grid-column:1/-1">'+esc(lab)+'<textarea class="s" rows="2" style="width:100%;margin-top:2px" id="sf'+i+'">'+escA(val)+'</textarea></label>';return;}
-  var tp=/^(Receipt date|Delivery Date|Delivery to Customer|Arriving to Customer)$/.test(c)?'date':'text';
-  h+='<label style="font-size:12px;color:#6b7a90">'+esc(lab)+'<input type="'+tp+'" class="s" style="width:100%;margin-top:2px" id="sf'+i+'" value="'+escA(String(val).slice(0,tp==='date'?10:9999))+'"></label>';});
- h+='</div><div style="margin-top:12px;text-align:right"><button class="btn ghost sm" onclick="document.getElementById(\'staform\').innerHTML=\'\'">ยกเลิก</button> '
-  +'<button class="btn" onclick="staSubmit('+(ri==null?'null':ri)+')">บันทึก</button></div></div>';
- var f=document.getElementById('staform');f.innerHTML=h;if(f.scrollIntoView)f.scrollIntoView({behavior:'smooth',block:'start'});}
+// 💾 บันทึกบรรทัดเดียว — ปุ่มหมุนจนกว่าจะเสร็จ · ไม่โหลดทั้งหน้าใหม่ (อัปเดตในเครื่องเลย)
+async function staSave(ix,patch){
+ var x=STA_LIST[ix];if(!x||STA_BUSY[x.key])return;
+ if(!STA.ok){alert('ยังบันทึกไม่ได้ — Apps Script ยังไม่ได้ติดตั้งส่วน Status');return;}
+ var v=Object.assign({},x.v,STA_DRAFT[x.key]||{},patch||{});v['Updated']=staToday();
+ if(!String(v['PO']||'').trim()&&!String(v['S/O']||'').trim()){alert('ต้องมีอย่างน้อย PO หรือ S/O');return;}
+ var vals=STA.head.map(function(c){return v[c]==null?'':String(v[c]).trim();});
+ STA_BUSY[x.key]=1;renderSTA();
+ try{
+  if(x.ri==null){var j=await staPost({action:'addrows',sheet:'status',rows:[vals]});
+   var ri=(j&&j.lastRow)?j.lastRow-2:STA.rows.length;var row=vals.slice();row._ri=ri;
+   STA.rows=STA.rows.filter(function(r){return r._ri!==ri;});STA.rows.push(row);
+   STA_EXTRA=STA_EXTRA.filter(function(e){return e.key!==x.key;});}
+  else{await staPost({action:'updaterow',sheet:'status',rowIndex:x.ri,values:vals});
+   var r=STA.rows.find(function(q){return q._ri===x.ri;});if(r)vals.forEach(function(val,i){r[i]=val;});}
+  delete STA_DRAFT[x.key];
+ }catch(e){alert('บันทึกไม่สำเร็จ: '+e.message);}
+ delete STA_BUSY[x.key];renderSTA();}
+function staHide(ix,on){var x=STA_LIST[ix];if(!x)return;var v=Object.assign({},x.v,STA_DRAFT[x.key]||{}),rm=String(v['Remark']||'').replace(/^#ซ่อน\s*/,'');
+ staSave(ix,{'Remark':on?('#ซ่อน '+rm).trim():rm});}
 async function staPost(body){
  var r=await fetch(URL_AS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
  var j=await r.json();if(!j||!j.ok)throw new Error((j&&j.error)||'บันทึกไม่สำเร็จ');return j;}
 async function staRun(msg,fn){
  if(!STA.ok){alert('ยังบันทึกไม่ได้ — Apps Script ยังไม่ได้ติดตั้งส่วน Status');return;}
  var ov=document.getElementById('ov'),ot=document.getElementById('ovt');ov.style.display='flex';ot.textContent=msg;
- try{await fn();ov.style.display='none';staSel={};await loadDB();tab(4);}
+ try{await fn();ov.style.display='none';await loadDB();tab(4);}
  catch(e){ov.style.display='none';alert('ไม่สำเร็จ: '+e.message);}}
 function staRowVals(ri,patch){var r=STA.rows.find(function(x){return x._ri===ri;}),v=staVals(r);Object.assign(v,patch||{});v['Updated']=staToday();
  return STA.head.map(function(c){return v[c]==null?'':v[c];});}
