@@ -327,7 +327,7 @@ function doLogout(){ if(!confirm('ออกจากระบบ? ข้อม�
 var DRIVE_PROCESSED_URL='https://drive.google.com/drive/folders/11IJDKDVPL2aGqxBaM_-Ur44Xf98ld1K7';
 function buildFrtMap(fa){FRTMAP={};if(!fa||!fa.length)return;var h=fa[0],ix=function(n){return h.indexOf(n);};
  var iH=ix('HAWB'),iI=ix('Freight Inv'),iA=ix('Air Freight'),iC=ix('Clearing'),iT=ix('Transport'),iO=ix('Overtime'),iKd=ix('Knock Door'),iF=ix('Custom Fee'),iTe=ix('Terminal'),iTv=ix('Terminal VAT'),iIn=ix('Insurance'),iIv=ix('Insurance VAT'),iV=ix('Freight VAT'),iFiv=ix('Freight Inv VAT'),iUsd=ix('Freight USD'),iPe=ix('Penalty'),iBo=ix('Bonded'),iVr=ix('VATreg'),iHW=ix('HAWB Weight'),iTx=ix('Tax Payment No'),iTmI=ix('Terminal Inv'),iInI=ix('Insurance Inv');
- fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,kd:iKd>=0?(+r[iKd]||0):0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):'',termInv:(iTmI>=0&&r[iTmI])?String(r[iTmI]):'',insInv:(iInI>=0&&r[iInI])?String(r[iInI]):''};});}
+ var iLk=ix('Freight Inv Link');fa.slice(1).forEach(function(r){if(!r[iH])return;FRTMAP[String(r[iH])]={lnk:iLk>=0?String(r[iLk]||''):'',inv:r[iI],air:+r[iA]||0,clear:+r[iC]||0,trans:+r[iT]||0,ot:+r[iO]||0,kd:iKd>=0?(+r[iKd]||0):0,cust:+r[iF]||0,term:+r[iTe]||0,termVat:+r[iTv]||0,ins:+r[iIn]||0,insVat:+r[iIv]||0,vat:+r[iV]||0,finvVat:iFiv>=0?(+r[iFiv]||0):0,usd:(iUsd>=0&&r[iUsd]!=='')?(+r[iUsd]||0):null,pen:iPe>=0?(+r[iPe]||0):0,bond:iBo>=0?(+r[iBo]||0):0,vreg:iVr>=0?(+r[iVr]||0):0,hwt:(iHW>=0&&r[iHW]!=='')?(+r[iHW]||0):null,taxpay:(iTx>=0&&r[iTx])?String(r[iTx]):'',termInv:(iTmI>=0&&r[iTmI])?String(r[iTmI]):'',insInv:(iInI>=0&&r[iInI])?String(r[iInI]):''};});}
 var view='report',filt='ALL',q='',editIdx=-1,editView='',dutyItem=false,repColOpen=false;
 function startEdit(i){editIdx=i;editView=view;render();}
 function cancelEdit(){editIdx=-1;editView='';render();}
@@ -803,7 +803,7 @@ function renderReport(){
  }
  CFROWS['report']=preCF;
  var h='<thead><tr><th>แก้</th>'+vc.map(function(i){return '<th class="'+(isN(i)?'num':'')+'" style="font-size:11px"><div class="thl">'+esc(COLS[i])+'</div>'+cfBtn('report',i)+'</th>';}).join('')+'</tr></thead><tbody>';
- h+=R.map(function(a){if(editFin===a._fi)return finEditorTR();return '<tr><td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ต้นทาง Finance" onclick="editFinRow('+(a._fi==null?-1:a._fi)+')">✏️</button></td>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(repMoney(i)?fmtMoney(a[i]):msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
+ h+=R.map(function(a){if(editFin===a._fi)return finEditorTR();return '<tr><td style="white-space:nowrap"><button class="btn sm ghost" title="แก้ต้นทาง Finance" onclick="editFinRow('+(a._fi==null?-1:a._fi)+')">✏️</button></td>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+repCell(a,i)+'</td>';}).join('')+'</tr>';}).join('');
  if(!R.length)h+='<tr><td class="empty" colspan="80">ไม่มีแถวตามตัวกรอง — กดปุ่มกรองที่หัวคอลัมน์เพื่อล้าง</td></tr>';
  h+='</tbody>';
  document.getElementById('tb').innerHTML=h;
@@ -931,6 +931,9 @@ function supplierOf(frtInv,dhlDutyInv,sys){var s=String(frtInv||''),y=String(sys
  if(y.indexOf('QDRU')===0)return 'S.CHAKKRIT TRANSPORT LIMITED PARTNERSHIP';   // หจก. ส.จักรกฤษณ์ ขนส่ง (16 ต.ค. 69)
  if(y.indexOf('DBJO')===0)return 'KUEHNE+NAGEL LIMITED';   // Kuehne + Nagel (26 ต.ค. 69)
  return '';}
+// 🔗 เลข Duty Invoice / Freight Invoice กดเปิด PDF ได้ (ลิงก์จากชีต: Duty Inv Link / Freight Inv Link)
+function repCell(a,i){var t=esc(repMoney(i)?fmtMoney(a[i]):msbcCell(a[i]));var u=staUrl(i===10?a._dl:i===15?a._fl:'');
+ return (u&&t)?'<a href="'+escA(u)+'" target="_blank" rel="noopener noreferrer" title="เปิด PDF">'+t+' 📄</a>':t;}
 function testRows(){return reportRows().map(function(a){return a.slice(0,17).concat([a[29]]);});}
 var reportColSel=null; // null = ทุกคอลัมน์; else array ของ index ที่เลือก
 function visCols(n){var out=[];for(var i=0;i<n;i++){if(reportColSel===null||reportColSel.indexOf(i)>=0)out.push(i);}return out;}
@@ -967,7 +970,7 @@ function reportRows(){
   var out=[h,g(r,'PO'),g(r,'Job No. Code'),g(r,'Part No. (PD)'),g(r,'Ref. Cost Sheet No.'),g(r,'Department'),g(r,'Declaration'),fmtDate(g(r,'Date')),
    w, wa, g(r,'Duty Invoice No.'), g(r,'Import Duty'), g(r,'Before VAT'), g(r,'VAT'),
    g(r,'Duty Amount'), frtInv, frtChg, clr, trn, fvat, cust, ot, kd, term, tvat, ins, ivat, amt, '', sup, fmtDate(g(r,'Upload Date'))];
-  out._fi=ridx[i];return out;
+  out._fi=ridx[i];out._dl=String(g(r,'Duty Inv Link')||'');out._fl=F?String(F.lnk||''):'';return out;
  });
 }
 function lineToArr(o){var q=o.Qty==null?1:o.Qty,cost=+o.Cost||0;
@@ -1153,7 +1156,7 @@ function renderMSBC(){
    var h='<thead>';
    if(isRep)h+='<tr>'+vc.map(function(i){return '<th>'+esc(REPORT_TH[i])+'</th>';}).join('')+'</tr>';
    h+='<tr>'+vc.map(function(i){return '<th'+(isRep?' style="font-weight:400;font-size:10px;opacity:.85"':'')+'>'+esc(COLS[i])+'</th>';}).join('')+'</tr></thead><tbody>';
-   h+=R.map(function(a){return '<tr>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+esc(repMoney(i)?fmtMoney(a[i]):msbcCell(a[i]))+'</td>';}).join('')+'</tr>';}).join('');
+   h+=R.map(function(a){return '<tr>'+vc.map(function(i){return '<td class="'+(isN(i)?'num':'')+'">'+repCell(a,i)+'</td>';}).join('')+'</tr>';}).join('');
    h+='</tbody>';
    document.getElementById('mtb').innerHTML=R.length?h:'<tbody><tr><td class="empty">ไม่มีข้อมูล</td></tr></tbody>';
    document.getElementById('mnote').innerHTML=R.length+' แถว · '+(isRep?'ฟอร์แมต Report เต็ม + Penalty/Bonded/VAT + Supplier':'ฟอร์แมต test = ฝั่งอากร + Penalty/Bonded/VAT + Supplier');
