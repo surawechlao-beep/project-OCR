@@ -2217,7 +2217,7 @@ function setSTA(d){
  if(!STA.head.length||!STA.head[0])STA.head=STA_HEAD.slice();
  STA.miss=STA_HEAD.filter(function(h){return STA.head.indexOf(h)<0;});
  STA.rows.forEach(function(r,i){r._ri=i;});
- setSO(d);}
+ setSO(d);SB_ITEMS=null;}
 function setSO(d){SO_BY_JOB={};var v=(d&&d.so)||[];if(v.length<2)return;
  var H=v[0].map(function(x){return String(x||'').trim();}),c=function(n){return H.indexOf(n);};
  var iN=c('No.'),iJ=c('Job No. Code'),iC=c('Sell-to Customer Name'),iP=c('Customer Order No.'),iS=c('Salesperson Code'),iD=c('Requested Delivery Date');
@@ -2294,6 +2294,18 @@ var sbView='board', sbFL='', sbOld=false, sbMini=null, sbMode='', sbOpen=null, S
 'table.sb-lst td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}table.sb-lst tr:hover td{background:var(--brand-50);cursor:pointer}'+
 '.spin{display:inline-block;animation:staspin 1s linear infinite}@keyframes staspin{to{transform:rotate(360deg)}}';
 document.head.appendChild(s);})();
+// 📦 ไอเท็มของแต่ละ PO+HAWB — ดึงจากชีต Purchase (Description / คำแปล / Qty)
+var SB_ITEMS=null;
+function sbItemsOf(v){
+ if(!SB_ITEMS){SB_ITEMS={};var H=PUR_ALL.head||[],c=function(n){return colIdx(H,n);},iH=c('HAWB'),iP=c('PO'),iD=c('Description'),iT=c('คำแปล'),iQ=c('Qty');
+  (PUR_ALL.rows||[]).forEach(function(r){var k=String(r[iP]||'').trim()+'|'+String(r[iH]||'').trim(),d=String(iD<0?'':r[iD]||'').trim();if(!d)return;
+   var L=SB_ITEMS[k]=SB_ITEMS[k]||[],q=+(iQ<0?1:r[iQ])||0,th=iT<0?'':String(r[iT]||'').trim(),f=L.find(function(x){return x.d===d;});
+   if(f)f.q+=q;else L.push({d:d,th:th,q:q});});}
+ var o=[];staSplit(v['PO']).forEach(function(p){(staSplit(v['HAWB']).length?staSplit(v['HAWB']):['']).forEach(function(h){(SB_ITEMS[p+'|'+h]||[]).forEach(function(x){o.push(x);});});});
+ return o;}
+function sbQ(q){return q?' ×'+(Math.round(q*100)/100):'';}
+function sbItemLine(v,n){var L=sbItemsOf(v);if(!L.length)return '';n=n||2;
+ return L.slice(0,n).map(function(x){return esc(String(x.th||x.d).slice(0,40))+sbQ(x.q);}).join(' · ')+(L.length>n?' <span class="sb-meta">+'+(L.length-n)+' รายการ</span>':'');}
 function sbStage(v){if(/^#ซ่อน/.test(String(v['Remark']||'').trim()))return 'hide';if(v['Acc Done'])return 'done';if(v['Delivery Note'])return 'acc';
  if(v['Delivery to Customer'])return 'dn';if(v['Appt Delivery'])return 'go';if(v['DO No']||v['DO Date'])return 'appt';return 'do';}
 // "ติดอะไร" — ระบบบอกเอง
@@ -2348,18 +2360,19 @@ function renderSTA(){
  }else{
   var R=SB.filter(function(x){return (sbOld||!x.old)&&sbHit(x);}).sort(sbSort);
   h+='<label style="font-size:12px"><input type="checkbox" '+(sbOld?'checked':'')+' onchange="sbOld=this.checked;renderSTA()"> รวมของเข้าก่อน '+staFmt(STA_START)+'</label>';
-  h+='<div class="tbl-wrap" style="margin-top:6px"><table class="sb-lst"><tr><th>SO</th><th>ลูกค้า</th><th>PO / HAWB</th><th>ขั้น</th><th>อายุ</th><th>ติดอะไร</th><th>DO</th><th>นัดส่ง</th><th>ส่งจริง</th></tr>';
+  h+='<div class="tbl-wrap" style="margin-top:6px"><table class="sb-lst"><tr><th>SO</th><th>ลูกค้า</th><th>PO / HAWB</th><th>ไอเท็ม</th><th>ขั้น</th><th>อายุ</th><th>ติดอะไร</th><th>DO</th><th>นัดส่ง</th><th>ส่งจริง</th></tr>';
   R.slice(0,500).forEach(function(x){var s=SB_ST.find(function(q){return q[0]===x.st;});var i=SB.indexOf(x);
-   h+='<tr onclick="sbPanel('+i+')"><td><b>'+esc(x.v['S/O']||'—')+'</b></td><td>'+esc(x.v['Customer'])+'</td><td style="font-size:12px">'+esc(x.v['PO'])+'<br><span class="sb-meta">'+esc(x.v['HAWB'])+'</span></td>'
+   h+='<tr onclick="sbPanel('+i+')"><td><b>'+esc(x.v['S/O']||'—')+'</b></td><td>'+esc(x.v['Customer'])+'</td><td style="font-size:12px">'+esc(x.v['PO'])+'<br><span class="sb-meta">'+esc(x.v['HAWB'])+'</span></td><td style="font-size:12px;max-width:260px">'+sbItemLine(x.v,3)+'</td>'
     +'<td>'+(s?s[1]:x.st==='done'?'✅ เสร็จ':'🙈 ซ่อน')+(x.ri==null?'<div class="sb-meta">ยังไม่บันทึก</div>':'')+'</td><td>'+sbAge(x)+'</td><td style="font-size:12px">'+x.f.why.map(function(w){return esc(w[0]);}).join('<br>')+(x.v['Next Action']?'<br>💬 '+esc(x.v['Next Action']):'')+'</td>'
     +'<td>'+esc(x.v['DO No'])+'</td><td>'+staFmt(String(x.v['Appt Delivery']||'').slice(0,10))+' '+esc(x.v['Appt Time']||'')+'</td><td>'+staFmt(String(x.v['Delivery to Customer']||'').slice(0,10))+'</td></tr>';});
-  if(!R.length)h+='<tr><td colspan="9" class="sb-meta" style="text-align:center;padding:16px">ไม่มีรายการ</td></tr>';
+  if(!R.length)h+='<tr><td colspan="10" class="sb-meta" style="text-align:center;padding:16px">ไม่มีรายการ</td></tr>';
   h+='</table></div>';}
  if(sbOpen!=null&&SB[sbOpen])h+=sbPanelHTML(SB[sbOpen]);
  el.innerHTML=h;}
 function sbCard(x){var i=SB.indexOf(x),v=x.v,busy=sbBusy[x.key];
  var h='<div class="sb-card '+x.f.lv+'" onclick="sbPanel('+i+')"><div class="sb-r1"><span class="sb-so">'+esc(v['S/O']||'(ยังไม่มี S/O)')+'</span>'+sbAge(x)+'</div>'
   +'<div class="sb-cus">'+esc(v['Customer']||'—')+'</div><div class="sb-meta">'+esc(v['PO'])+' · '+esc(v['Job']||'')+(v['Sale']?' · '+esc(v['Sale']):'')+'</div>';
+ var il=sbItemLine(v,2);if(il)h+='<div style="font-size:12px;margin-top:4px;color:var(--ink)">📦 '+il+'</div>';
  if(v['DO No']&&x.st!=='do')h+='<span class="sb-tag">DO '+esc(v['DO No'])+'</span>';
  if(v['Appt Delivery']&&!v['Delivery to Customer'])h+='<span class="sb-tag ok">🚚 '+staFmt(String(v['Appt Delivery']).slice(0,10))+(v['Appt Time']?' '+esc(v['Appt Time']):'')+'</span>';
  x.f.why.forEach(function(w){h+='<div class="sb-why '+w[1]+'">'+esc(w[0])+'</div>';});
@@ -2427,6 +2440,9 @@ function sbPanelHTML(x){var v=x.v,i=SB.indexOf(x),ord=['do','appt','go','dn','ac
   ['แนบใบส่งของ',staUrl(v['Delivery Note'])?'<a href="'+escA(staUrl(v['Delivery Note']))+'" target="_blank" rel="noopener noreferrer">📄 เปิดไฟล์</a>':''],['บัญชีเรียบร้อย',staFmt(String(v['Acc Done']||'').slice(0,10))]];
  var h='<div class="sb-panel" onclick="event.stopPropagation()"><div class="sb-r1"><b style="font-size:17px;color:var(--brand-700)">'+esc(v['S/O']||'(ยังไม่มี S/O)')+'</b><button class="btn ghost sm" onclick="sbOpen=null;renderSTA()">✕ ปิด</button></div>'
   +'<div class="sb-meta">'+esc(v['Customer']||'')+'</div><div class="sb-meta">PO '+esc(v['PO'])+' · HAWB '+esc(v['HAWB'])+' · Job '+esc(v['Job']||'')+'</div><div style="margin-top:6px">'+sbAge(x)+'</div>'
+  +(function(){var L=sbItemsOf(v);if(!L.length)return '<div class="sb-meta" style="margin-top:8px">📦 ไม่พบรายการสินค้าในชีต Purchase ของ PO/HAWB นี้</div>';
+   return '<div style="margin-top:10px;font-weight:700;font-size:13px">📦 ไอเท็ม '+L.length+' รายการ</div><table class="sb-lst" style="margin-top:4px"><tr><th>รายการ</th><th style="text-align:right">จำนวน</th></tr>'
+    +L.map(function(it){return '<tr style="cursor:default"><td>'+esc(it.d)+(it.th&&it.th!==it.d?'<div class="sb-meta">'+esc(it.th)+'</div>':'')+'</td><td style="text-align:right">'+(Math.round(it.q*100)/100)+'</td></tr>';}).join('')+'</table>';})()
   +'<ul class="sb-steps">'+S.map(function(s,j){var c=(x.st!=='hide'&&j<=k)?'y':(j===k+1?'n':'');return '<li><span class="sb-dot '+c+'">'+(c==='y'?'✓':j+1)+'</span><div><b>'+s[0]+'</b><div class="sb-meta">'+(s[1]||(j===k+1?'ขั้นถัดไป':'—'))+'</div></div></li>';}).join('')+'</ul>'
   +x.f.why.map(function(w){return '<div class="sb-why '+w[1]+'">'+esc(w[0])+'</div>';}).join('')
   +'<div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px">';
