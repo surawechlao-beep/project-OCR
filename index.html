@@ -231,6 +231,7 @@ mark{background:#fff3a8;border-radius:3px;padding:0 2px}
       <span class="pill" id="mt7" onclick="msbcType='scsfreight';reportColSel=null;renderMSBC()">SANKYU FREIGHT</span>
       <span class="pill" id="mt10" onclick="msbcType='scsfreight2';reportColSel=null;renderMSBC()">SANKYU FREIGHT (&gt;1 Job)</span>
       <span class="pill" id="mt9" onclick="msbcType='knduty';reportColSel=null;renderMSBC()">KUEHNE DUTY</span>
+      <span class="pill" id="mt11" onclick="msbcType='knfreight';reportColSel=null;renderMSBC()">KUEHNE FREIGHT</span>
       &nbsp; <input id="mq" placeholder="🔍 ค้นในตาราง" oninput="renderMSBC()" style="padding:5px 9px;border:1px solid #C7DAF0;border-radius:6px;font-family:inherit;font-size:12px;width:180px">
     </div>
     <button class="btn" id="mcolbtn" onclick="toggleColPanel()" style="display:none">🔧 เลือกคอลัมน์</button>
@@ -998,7 +999,8 @@ function msbcGenOne(hawb){
  // ⭐ ซังกิว: ใช้โครงบรรทัดชุดเดียวกับ GLI ไปก่อน (ยังไม่มี journal ตัวอย่างของซังกิวมาเทียบ)
  var scs=(msbcType==='scsduty'||msbcType==='scsfreight'||msbcType==='scsfreight2');
  var scs2=(msbcType==='scsfreight2');   // 5 พ.ย. 69: SANKYU FREIGHT (>1 Job)
- var kn=(msbcType==='knduty');   // KUEHNE DUTY: ไม่มีบรรทัดค่าเคลียร์ · มีแค่อากร + คู่ INPUT VAT ของ K+N (template 26 ต.ค. 69)
+ var kn=(msbcType==='knduty');
+ var knf=(msbcType==='knfreight');   // 17 พ.ย. 69: KUEHNE FREIGHT   // KUEHNE DUTY: ไม่มีบรรทัดค่าเคลียร์ · มีแค่อากร + คู่ INPUT VAT ของ K+N (template 26 ต.ค. 69)
  var dhl2=(msbcType==='dhlduty2');
  var gli2=(msbcType==='glifreight2'), gli=gli2||scs||isGliHawb(hawb), sys=rows[0][ci('Duty Invoice No.')]||'', dhlInv=rows[0][ci('DHL Duty Inv.')]||'', L=[];
  var kind=msbcType.indexOf('freight')>=0?'freight':'duty';
@@ -1038,7 +1040,24 @@ function msbcGenOne(hawb){
   if(base>0) vatPair(base, kn?(sys+' - KUEHNE+NAGEL LIMITED'):scs?(sys+' - SANKYU THAI COMPANY LIMITED')
     : (gli?sys:((F&&F.taxpay)?F.taxpay:'1190'))+(gli?' - GLOBAL LOGISTICS INTEGRATOR (THAILAND) COMPANY LIMITED':' - THE CUSTOMS DEPARTMENT'));
  }else{
-  if(scs2){
+  if(knf){
+   // ===== KUEHNE FREIGHT — โครงตาม template แท็บ KUEHNE FREIGHT (MSBC_ALL_scsfreight.xlsx) ที่ผู้ใช้ส่งมา 17 พ.ย. 69 (BKK5987192 / 1077867482) =====
+   //  ใบ K+N สรุปยอดตามรหัส VAT ท้ายใบ: I (0%) = Air Freight · 1 (7%) = Clearing (รวม INSURANCE ที่ K+N เก็บพร้อม VAT ด้วย) · K = Transport
+   //  Z (สำรองจ่าย ไม่มี VAT ของ K+N) = CUSTOMS EDI FEE → Custom Fee · CUSTOMS OVERTIME → Overtime · BFS → Terminal (รวม VAT ของ BFS)
+   //  ไล่ทีละ PO/Job: FREIGHT(NOVAT/SERVICE) · CLEARANCE(NOVAT/SERVICE) · TRANSPORT(NOVAT/TRANSPORT · Line 60000 ตาม template) · CUSTOM FEE · OT(5112005)
+   //   · BFS ก่อน VAT (GVAT/NOWHT — MSBC คิด 7% เอง) · INSURANCE (ช่อง Insurance ในชีต — ปกติ 0 เพราะประกันอยู่ใน Clearing)
+   //  ปิดด้วยคู่ INPUT VAT ของ K+N (SVAT) ฐาน = Clearing (= NET AMOUNTS กลุ่ม 7% บนใบ)
+   var TK=exVat(F?F.term:0,F?F.termVat:0), IK=exVat(F?F.ins:0,F?F.insVat:0);
+   groups.forEach(function(g){
+    L.push({HAWB:hawb,Type:'Item',No:'Z-FREIGHT',Desc:'FREIGHT CHARGE - '+g.po,Cost:fc((F?F.air:0)*g.rt),UoM:'UNIT',GenProd:'5112002',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job,ItemNo:'Z-FREIGHT',ItemCat:'Z-OTHERS'});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc((F?F.clear:0)*g.rt),GenProd:'5112001',VATProd:'NOVAT',WHT:'SERVICE',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'Item',No:'Z-TRANSPORT',Desc:'LOCAL TRANSPORT - '+g.po,Cost:fc((F?F.trans:0)*g.rt),UoM:'UNIT',GenProd:'5112006',VATProd:'NOVAT',WHT:'TRANSPORT',RefCS:g.cs,RefCSLine:60000,Dept:g.dept,Job:g.job,ItemNo:'Z-TRANSPORT',ItemCat:'Z-OTHERS'});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'CUSTOM FEE - '+g.po,Cost:fc((F?(F.cust+(F.kd||0)):0)*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    if(F&&F.ot) L.push({HAWB:hawb,Type:'G/L Account',No:'5112005',GLName:'CUSTOM FEE',Desc:'OT - '+g.po,Cost:fc(F.ot*g.rt),GenProd:'5112005',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'G/L Account',No:'5112001',GLName:'CUSTOM CLEARANCE',Desc:'CUSTOM CLEARANCE - '+g.po,Cost:fc(TK.ex*g.rt),GenProd:'5112001',VATProd:'GVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:10000,Dept:g.dept,Job:g.job});
+    L.push({HAWB:hawb,Type:'Item',No:'Z-INSURANCE',Desc:'INSURANCE - '+g.po,Cost:fc(IK.ex*g.rt),UoM:'UNIT',GenProd:'5112003',VATProd:'NOVAT',WHT:'NOWHT',RefCS:g.cs,RefCSLine:50000,Dept:g.dept,Job:g.job,ItemNo:'Z-INSURANCE',ItemCat:'Z-OTHERS'});});
+   if(F&&F.clear) vatPair(r2(F.clear),(F.inv||'')+' - KUEHNE+NAGEL LIMITED','SVAT');
+  }else if(scs2){
    // ===== SANKYU FREIGHT (>1 Job) — โครงตาม template MSBC_ALL_scsfreight (8).xlsx ที่ผู้ใช้ส่งมา 5 พ.ย. 69 =====
    //  ไล่ทีละ PO/Job: FREIGHT · CLEARANCE(SERVICE) · TRANSPORT(WHT TRANSPORT) · CUSTOM FEE · โกดัง(ก่อน VAT, NOVAT/NOWHT) · ประกัน(ก่อน VAT, NOVAT/NOWHT)
    //  แล้วต่อด้วยคู่ INPUT VAT 3 คู่: โกดัง GVAT · ประกัน GVAT · SANKYU SVAT (ฐาน = Air + Clearing, Transport ไม่มี VAT)
@@ -1141,7 +1160,7 @@ function renderMSBC(){
  var hawbs=[...new Set((FIN.rows||[]).map(function(r){return r[hi];}))].filter(Boolean);
  var sel=document.getElementById('mh');
  if(sel)sel.innerHTML='<option value="ALL"'+(msbcHAWB==='ALL'?' selected':'')+'>ทั้งหมด ('+hawbs.length+' ใบขน)</option>'+hawbs.map(function(h){return '<option '+(msbcHAWB===h?'selected':'')+'>'+h+'</option>';}).join('');
- [['mt1','gliduty'],['mt2','glifreight'],['mt5','glifreight2'],['mt3','dhlduty'],['mt8','dhlduty2'],['mt4','dhlfreight'],['mt6','scsduty'],['mt7','scsfreight'],['mt10','scsfreight2'],['mt9','knduty']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
+ [['mt1','gliduty'],['mt2','glifreight'],['mt5','glifreight2'],['mt3','dhlduty'],['mt8','dhlduty2'],['mt4','dhlfreight'],['mt6','scsduty'],['mt7','scsfreight'],['mt10','scsfreight2'],['mt9','knduty'],['mt11','knfreight']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.classList.toggle('on',msbcType===p[1]);});
  var mcb=document.getElementById('mcolbtn');
  var _mp=document.getElementById('mcolpanel');if(_mp&&_mp.style.display!=='none')setTimeout(buildColPanel,0);
  if(msbcType==='report'||msbcType==='test'){
@@ -1169,7 +1188,7 @@ function renderMSBC(){
  L=msbcFilterQ(L);
  var MC=mCols(), vc=visCols(MC.length);
  var nsel=(reportColSel===null)?'':(' · เลือก '+vc.length+'/'+MC.length+' คอลัมน์');
- var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlduty2:'DHL DUTY (>1 Job)',dhlfreight:'DHL FREIGHT',scsduty:'SANKYU DUTY',scsfreight:'SANKYU FREIGHT',scsfreight2:'SANKYU FREIGHT (>1 Job)',knduty:'KUEHNE DUTY'}[msbcType]||msbcType;
+ var lbl={gliduty:'GLI DUTY',glifreight:'GLI FREIGHT',glifreight2:'GLI FREIGHT (>1 Job)',dhlduty:'DHL DUTY',dhlduty2:'DHL DUTY (>1 Job)',dhlfreight:'DHL FREIGHT',scsduty:'SANKYU DUTY',scsfreight:'SANKYU FREIGHT',scsfreight2:'SANKYU FREIGHT (>1 Job)',knduty:'KUEHNE DUTY',knfreight:'KUEHNE FREIGHT'}[msbcType]||msbcType;
  document.getElementById('mcase').innerHTML='คอลัมน์ตรงรูปแบบ MSBC import — จัดกลุ่มต่อ PO · กด 🔧 เลือกคอลัมน์ · 📋 คัดลอก/Excel วางลง Business Central ได้เลย · แถบ: <b>'+lbl+'</b>'+nsel;
  var h='<thead><tr>'+vc.map(function(i){var c=MC[i];return '<th class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(c)?'num':'')+'">'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>';
  h+=L.map(function(o){var a=lineArr(o);return '<tr>'+vc.map(function(i){var v=a[i];return '<td class="'+(/Cost|Amount|Quantity|VAT \(|Total|Row No/.test(MC[i])?'num':'')+'">'+esc(msbcMoneyCol(i)?fmtMoney(v):msbcCell(v))+'</td>';}).join('')+'</tr>';}).join('');
